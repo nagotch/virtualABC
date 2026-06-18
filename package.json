@@ -1,8 +1,13 @@
 {
   "name": "virtualabc",
-  "module": "index.ts",
+  "module": "server/index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev:server": "bun run --hot server/index.ts",
+    "dev:client": "cd client && bun run dev",
+    "dev:bot": "bun run --hot bot/index.ts"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
@@ -10,6 +15,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "hono": "^4.12.26",
     "traq-bot-ts": "^1.5.2"
   }
 }

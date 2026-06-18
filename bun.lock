@@ -5,6 +5,7 @@
     "": {
       "name": "virtualabc",
       "dependencies": {
+        "hono": "^4.12.26",
         "traq-bot-ts": "^1.5.2",
       },
       "devDependencies": {
@@ -21,6 +22,8 @@
     "@types/node": ["@types/node@25.9.3", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-603BddQMv3pUcr4U2dhujk83N2tTDVr/34wII2B6bJy6g+8WD6yUb11jszNs0gdi4PesVWl7ABt8nYMVpnLUcg=="],
 
     "bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
+
+    "hono": ["hono@4.12.26", "", {}, "sha512-uyZtpnYxM9CmQ7QsQknM4zN8EftNqhON1qYeIKM0Se67CCEe2c44xyGURwB0axX2fBDu1dqHrHAc1hmNT8ITkw=="],
 
     "traq-bot-ts": ["traq-bot-ts@1.5.2", "", { "dependencies": { "ws": "8.18.0", "zod": "3.23.8" } }, "sha512-w1jHwKoq8L8hX0W15m4vBfT0B/SPORJv7CM+3kmI6NHyNQte4a0OTQhc/R9nOkrKynLiHV3coLpqSHbevFnHZg=="],
 
