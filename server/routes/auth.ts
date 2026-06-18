@@ -35,7 +35,7 @@ app.get('/login', async (c) => {
   url.searchParams.set('client_id',              CLIENT_ID);
   url.searchParams.set('redirect_uri',           REDIRECT_URI);
   url.searchParams.set('state',                  state);
-  url.searchParams.set('scope',                  'openid');
+  url.searchParams.set('scope',                  'read');
   url.searchParams.set('code_challenge',         codeChallenge);
   url.searchParams.set('code_challenge_method',  'S256');
 
