@@ -6,9 +6,8 @@ export type User = {
 };
 
 export type RatingInfo = {
-  atcoderId: string;
-  exists: boolean;
-  rating: number | null;
+  rating: number | null; // virtualABC 独自レート
+  contests: number;      // レート算出に使った（終了済み参加）コンテスト数
 };
 
 export type ColorKey =
@@ -74,23 +73,41 @@ export type ContestDetail = {
   canViewProblems: boolean;
 };
 
-// 色の定義（表示用）
-export const COLOR_DEFS: { key: ColorKey; label: string; hex: string }[] = [
-  { key: 'grey',   label: '灰', hex: '#808080' },
-  { key: 'brown',  label: '茶', hex: '#804000' },
-  { key: 'green',  label: '緑', hex: '#008000' },
-  { key: 'cyan',   label: '水', hex: '#00c0c0' },
-  { key: 'blue',   label: '青', hex: '#0000ff' },
-  { key: 'yellow', label: '黄', hex: '#c0c000' },
-  { key: 'orange', label: '橙', hex: '#ff8000' },
-  { key: 'red',    label: '赤', hex: '#ff0000' },
+// AtCoderのレート帯色。light=従来色 / dark=暗背景でも見やすい明るめの色。
+type Band = { key: ColorKey; label: string; min: number; light: string; dark: string };
+const BANDS: Band[] = [
+  { key: 'grey',   label: '灰', min: 0,    light: '#808080', dark: '#b9b9b9' },
+  { key: 'brown',  label: '茶', min: 400,  light: '#804000', dark: '#cd8b48' },
+  { key: 'green',  label: '緑', min: 800,  light: '#008000', dark: '#5cc85c' },
+  { key: 'cyan',   label: '水', min: 1200, light: '#00c0c0', dark: '#36d6d6' },
+  { key: 'blue',   label: '青', min: 1600, light: '#0000ff', dark: '#7d93ff' },
+  { key: 'yellow', label: '黄', min: 2000, light: '#c0c000', dark: '#dede3a' },
+  { key: 'orange', label: '橙', min: 2400, light: '#ff8000', dark: '#ffa64d' },
+  { key: 'red',    label: '赤', min: 2800, light: '#ff0000', dark: '#ff5b5b' },
 ];
 
-export const colorHex = (key: ColorKey | null): string =>
-  COLOR_DEFS.find((c) => c.key === key)?.hex ?? '#808080';
+export const COLOR_DEFS: { key: ColorKey; label: string }[] =
+  BANDS.map(({ key, label }) => ({ key, label }));
+
+const isDark = (): boolean =>
+  typeof document !== 'undefined' &&
+  document.documentElement.getAttribute('data-theme') === 'dark';
+
+// 色キーに対応する表示色（テーマ対応）
+export const colorHex = (key: ColorKey | null): string => {
+  const b = BANDS.find((c) => c.key === key) ?? BANDS[0];
+  return isDark() ? b.dark : b.light;
+};
 
 export const colorLabel = (key: ColorKey | null): string =>
-  COLOR_DEFS.find((c) => c.key === key)?.label ?? '?';
+  BANDS.find((c) => c.key === key)?.label ?? '?';
+
+// レート/難易度の数値に対応する表示色（テーマ対応）
+export const ratingColor = (value: number): string => {
+  let b = BANDS[0];
+  for (const x of BANDS) if (value >= x.min) b = x;
+  return isDark() ? b.dark : b.light;
+};
 
 // ISO日時をJST表記に
 export const fmtDateTime = (iso: string | null): string => {

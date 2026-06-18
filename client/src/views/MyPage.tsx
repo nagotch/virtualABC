@@ -1,16 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type RatingInfo, type User } from '../api';
-
-const ratingColor = (r: number): string => {
-  if (r >= 2800) return '#ff0000';
-  if (r >= 2400) return '#ff8000';
-  if (r >= 2000) return '#c0c000';
-  if (r >= 1600) return '#0000ff';
-  if (r >= 1200) return '#00c0c0';
-  if (r >= 800) return '#008000';
-  if (r >= 400) return '#804000';
-  return '#808080';
-};
+import { api, ratingColor, type RatingInfo, type User } from '../api';
 
 const TRAQ_ICON = (name: string) =>
   `https://q.trap.jp/api/v3/public/icon/${encodeURIComponent(name)}`;
@@ -54,11 +43,11 @@ export default function MyPage({
 
   const renderRating = () => {
     if (!rating) return <span className="badge unset">確認中...</span>;
-    if (!rating.exists) return <span className="badge unset">ユーザーが見つかりません</span>;
-    if (rating.rating === null) return <span className="badge unset">レート無し（未参加）</span>;
+    if (rating.rating === null) return <span className="badge unset">未参加（レート無し）</span>;
     return (
       <span className="value" style={{ color: ratingColor(rating.rating) }}>
         {rating.rating}
+        <span className="rating-sub"> （{rating.contests}回）</span>
       </span>
     );
   };
@@ -91,7 +80,7 @@ export default function MyPage({
 
       {registered && (
         <div className="field">
-          <span className="label">現在のレート</span>
+          <span className="label">レート（独自）</span>
           {renderRating()}
         </div>
       )}

@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import db from '../db';
+import { getUserPerfHistory } from './contests';
+import { computeRating } from '../rating';
 
 const app = new Hono();
 
@@ -29,42 +31,15 @@ app.post('/register', async (c) => {
   return c.json({ ok: true, traqId, atcoderId });
 });
 
-type HistoryEntry = { IsRated: boolean; NewRating: number };
-
-// 指定AtCoder IDの現在のレーティングを取得（最後のRated参加結果）
-// exists: AtCoderにそのユーザーが存在するか
-// rating: 現在のレート（Rated参加歴がなければ null）
-const fetchRating = async (
-  atcoderId: string,
-): Promise<{ exists: boolean; rating: number | null }> => {
-  const res = await fetch(
-    `https://atcoder.jp/users/${encodeURIComponent(atcoderId)}/history/json`,
-  );
-  if (res.status === 404) return { exists: false, rating: null };
-  if (!res.ok) throw new Error(`AtCoder history fetch failed: ${res.status}`);
-  const history = await res.json() as HistoryEntry[];
-  const rated = history.filter((h) => h.IsRated);
-  if (rated.length === 0) return { exists: true, rating: null };
-  return { exists: true, rating: rated[rated.length - 1].NewRating };
-};
-
-// GET /api/users/rating → ログイン中ユーザーの現在のAtCoderレーティング
-app.get('/rating', async (c) => {
+// GET /api/users/rating → ログイン中ユーザーの virtualABC 独自レーティング
+// 参加して終了したコンテストの perf 履歴から算出する（AtCoderの実レートは使わない）。
+app.get('/rating', (c) => {
   const traqId = getTraqId(getCookie(c, 'session'));
   if (!traqId) return c.json({ error: 'unauthorized' }, 401);
 
-  const row = db.query<{ atcoder_id: string }, [string]>(
-    'SELECT atcoder_id FROM users WHERE traq_id = ?',
-  ).get(traqId);
-  if (!row?.atcoder_id) return c.json({ error: 'atcoder id not registered' }, 404);
-
-  try {
-    const { exists, rating } = await fetchRating(row.atcoder_id);
-    return c.json({ atcoderId: row.atcoder_id, exists, rating });
-  } catch (e) {
-    console.error('[users] failed to fetch rating:', e);
-    return c.json({ error: 'failed to fetch rating' }, 502);
-  }
+  const perfs = getUserPerfHistory(traqId); // 最新が先頭
+  const rating = computeRating(perfs);
+  return c.json({ rating, contests: perfs.length });
 });
 
 export default app;

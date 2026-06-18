@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, COLOR_DEFS, type ColorKey, type ContestMode } from '../api';
+import { api, COLOR_DEFS, colorHex, type ColorKey, type ContestMode } from '../api';
 
 type Mode = ContestMode;
 
@@ -153,7 +153,7 @@ export default function CreateContest() {
             <div className="color-grid">
               {COLOR_DEFS.map((c) => (
                 <div className="color-row" key={c.key}>
-                  <span className="color-dot" style={{ background: c.hex }} />
+                  <span className="color-dot" style={{ background: colorHex(c.key) }} />
                   <span className="color-name">{c.label}</span>
                   <input
                     type="number"

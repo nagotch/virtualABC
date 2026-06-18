@@ -153,6 +153,12 @@
   font-weight: 600;
 }
 
+.rating-sub {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 12px;
+}
+
 .user-id {
   display: inline-flex;
   align-items: center;
@@ -728,6 +734,17 @@ code {
 /* 未正解（誤答あり）: 赤 */
 .st-wa .st-cell-score {
   color: #ef4444;
+}
+
+/* ダークモードでは緑を明るめに（視認性向上） */
+:root[data-theme='dark'] .st-ac {
+  background: rgba(74, 222, 128, 0.18);
+}
+:root[data-theme='dark'] .st-ac .st-cell-score {
+  color: #4ade80;
+}
+:root[data-theme='dark'] .st-wa .st-cell-score {
+  color: #ff6b6b;
 }
 
 .st-pen {
