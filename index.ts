@@ -1,4 +1,6 @@
 import { Api, Client } from 'traq-bot-ts';
+import { fetchUserRating, ratingToColor } from './src/atcoder';
+import { getAtcoderId, registerUser } from './src/store';
 
 const TOKEN = process.env.TOKEN;
 const BOT_NAME = process.env.BOT_NAME ?? 'BOT_virtualABC';
@@ -28,19 +30,54 @@ client.on('MESSAGE_CREATED', async ({ body }) => {
   );
   if (!mentioned) return;
 
-  // plainText例: "@BOT_virtualABC help" → args = ["help"]
   const parts = message.plainText.trim().split(/\s+/);
   const mentionIdx = parts.findIndex((p) => p === `@${BOT_NAME}`);
   const args = parts.slice(mentionIdx + 1);
 
   const channelId = message.channelId;
+  const traqId = message.user.name;
 
-  if (args.length === 0 || args[0] === 'help') {
-    await sendHelp(channelId);
-    return;
+  switch (args[0]) {
+    case 'register': {
+      if (args.length < 2) {
+        await send(channelId, `:warning: 使い方: \`@${BOT_NAME} register <AtCoder ID>\``);
+        return;
+      }
+      registerUser(traqId, args[1]);
+      await send(channelId, `:white_check_mark: @${traqId} のAtCoder IDを \`${args[1]}\` として登録しました！`);
+      break;
+    }
+
+    case 'status': {
+      const atcoderId = getAtcoderId(traqId);
+      if (!atcoderId) {
+        await send(channelId, `:warning: AtCoder IDが未登録です。\`@${BOT_NAME} register <AtCoder ID>\` で登録してください。`);
+        return;
+      }
+      const info = await fetchUserRating(atcoderId);
+      if (!info) {
+        await send(channelId, `:information_source: **${atcoderId}** のレーティング情報が見つかりませんでした。`);
+        return;
+      }
+      await send(
+        channelId,
+        `## ${atcoderId} のステータス
+
+**レーティング**: ${info.rating}（${ratingToColor(info.rating)}）
+**最高レーティング**: ${info.highestRating}（${ratingToColor(info.highestRating)}）
+**参加コンテスト数**: ${info.ratedCount}回`,
+      );
+      break;
+    }
+
+    case undefined:
+    case 'help':
+      await sendHelp(channelId);
+      break;
+
+    default:
+      await send(channelId, `:warning: 不明なコマンドです。\`@${BOT_NAME} help\` でコマンド一覧を確認できます。`);
   }
-
-  await send(channelId, `:warning: 不明なコマンドです。\`@${BOT_NAME} help\` でコマンド一覧を確認できます。`);
 });
 
 const sendHelp = async (channelId: string) => {
@@ -51,10 +88,10 @@ const sendHelp = async (channelId: string) => {
 | コマンド | 説明 |
 |---------|------|
 | \`@${BOT_NAME} register <AtCoder ID>\` | AtCoder IDを登録する |
+| \`@${BOT_NAME} status\` | 自分のレーティングを確認する |
 | \`@${BOT_NAME} start <コンテストID> [時間(分)]\` | コンテストを開始する（例: \`@${BOT_NAME} start abc300\`）|
 | \`@${BOT_NAME} join\` | 進行中のコンテストに参加する |
 | \`@${BOT_NAME} standings\` | 現在の順位表を表示する |
-| \`@${BOT_NAME} status\` | コンテストの状態を確認する |
 | \`@${BOT_NAME} end\` | コンテストを終了して最終結果を表示する |`,
   );
 };
