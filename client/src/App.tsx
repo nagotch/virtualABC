@@ -1,17 +1,37 @@
 import { useEffect, useState } from 'react';
+import './App.css';
 
 type User = {
   traqId: string;
   atcoderId: string | null;
 };
 
+type Theme = 'light' | 'dark';
+
 const API = 'http://localhost:3000';
+
+const getInitialTheme = (): Theme => {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'light' || saved === 'dark') return saved;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
+};
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [atcoderId, setAtcoderId] = useState('');
   const [message, setMessage] = useState('');
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () =>
+    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
   const fetchMe = async () => {
     try {
@@ -53,34 +73,69 @@ function App() {
     }
   };
 
-  // ログイン確認中、または未ログインでOAuthへリダイレクト中
-  if (loading || !user) return <p>読み込み中...</p>;
+  const themeToggle = (
+    <button
+      className="theme-toggle"
+      onClick={toggleTheme}
+      aria-label="テーマ切り替え"
+      title={theme === 'dark' ? 'ライトモードへ' : 'ダークモードへ'}
+    >
+      {theme === 'dark' ? '☀️' : '🌙'}
+    </button>
+  );
 
   return (
-    <div style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '480px' }}>
-      <h1>Virtual ABC</h1>
+    <>
+      <header className="topbar">
+        <div className="brand">
+          <span className="logo">vABC</span>
+          <strong style={{ color: 'var(--text-h)' }}>Virtual ABC</strong>
+        </div>
+        {themeToggle}
+      </header>
 
-      <p>ログイン中: <strong>@{user.traqId}</strong></p>
-      <p>AtCoder ID: <strong>{user.atcoderId ?? '未登録'}</strong></p>
+      {loading || !user ? (
+        <div className="loading">読み込み中...</div>
+      ) : (
+        <main className="main">
+          <div className="card">
+            <h1>マイページ</h1>
 
-      <form onSubmit={handleRegister} style={{ marginTop: '1rem' }}>
-        <label>
-          AtCoder IDを登録
-          <br />
-          <input
-            value={atcoderId}
-            onChange={(e) => setAtcoderId(e.target.value)}
-            placeholder="例: chokudai"
-            style={{ marginTop: '0.5rem', padding: '0.4rem', width: '100%' }}
-          />
-        </label>
-        <button type="submit" style={{ marginTop: '0.5rem' }}>登録</button>
-      </form>
+            <div className="field">
+              <span className="label">traQ ID</span>
+              <span className="value">@{user.traqId}</span>
+            </div>
+            <div className="field">
+              <span className="label">AtCoder ID</span>
+              <span className={`badge${user.atcoderId ? '' : ' unset'}`}>
+                {user.atcoderId ?? '未登録'}
+              </span>
+            </div>
 
-      {message && <p>{message}</p>}
+            <form onSubmit={handleRegister}>
+              <label htmlFor="atcoderId">AtCoder IDを登録</label>
+              <input
+                id="atcoderId"
+                type="text"
+                className="text-input"
+                value={atcoderId}
+                onChange={(e) => setAtcoderId(e.target.value)}
+                placeholder="例: chokudai"
+              />
+              <button type="submit" className="btn btn-primary">
+                登録する
+              </button>
+            </form>
 
-      <button onClick={handleLogout} style={{ marginTop: '1rem' }}>ログアウト</button>
-    </div>
+            {message && <p className="msg">{message}</p>}
+
+            <button onClick={handleLogout} className="btn btn-ghost">
+              ログアウト
+            </button>
+          </div>
+        </main>
+      )}
+    </>
   );
 }
 
