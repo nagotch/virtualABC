@@ -88,6 +88,19 @@
   font-weight: 600;
 }
 
+.user-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
 .badge {
   font-family: var(--mono);
   font-size: 13px;
