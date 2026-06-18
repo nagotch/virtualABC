@@ -279,6 +279,41 @@ app.delete('/:id', (c) => {
 
 const PENALTY_PER_WRONG = 5 * 60; // 1誤答あたり5分（秒）
 
+// AtCoder Problemsのモデル: 内部レートxの人が難易度dを解く確率
+//   P(solve | x, d) = 1 / (1 + 10^((d - x)/400))
+const solveProb = (x: number, d: number): number => 1 / (1 + 10 ** ((d - x) / 400));
+
+// 解いた/解けなかったパターンの尤度を最大化する x を三分探索で推定する。
+// items: { d:difficulty, solved } の配列（difficultyが分かる問題のみ）。
+// 1問も解いていない/解ける問題が無い場合は null。
+const estimatePerformance = (
+  items: { d: number; solved: boolean }[],
+): number | null => {
+  const solvedCount = items.filter((i) => i.solved).length;
+  if (items.length === 0 || solvedCount === 0) return null;
+
+  const logLik = (x: number): number => {
+    let s = 0;
+    for (const it of items) {
+      const p = Math.min(Math.max(solveProb(x, it.d), 1e-9), 1 - 1e-9);
+      s += it.solved ? Math.log(p) : Math.log(1 - p);
+    }
+    return s;
+  };
+
+  // 尤度は x について凹なので三分探索。探索範囲は問題の難易度レンジ±800に制限
+  // （全完時に上限へ張り付くのを防ぎ、現実的な値にする）。
+  const ds = items.map((i) => i.d);
+  let lo = Math.min(...ds) - 800;
+  let hi = Math.max(...ds) + 800;
+  for (let i = 0; i < 60; i++) {
+    const m1 = lo + (hi - lo) / 3;
+    const m2 = hi - (hi - lo) / 3;
+    if (logLik(m1) < logLik(m2)) lo = m1; else hi = m2;
+  }
+  return Math.round((lo + hi) / 2);
+};
+
 type ProblemResult = {
   solved: boolean;
   penalties: number;        // AC前の誤答数
@@ -288,13 +323,14 @@ type StandingRow = {
   rank: number;
   traqId: string;
   atcoderId: string;
+  perf: number | null;      // 推定パフォーマンス
   score: number;
   penaltySeconds: number;
   problems: Record<string, ProblemResult>;
 };
 type Standings = {
   contest: { id: string; title: string; start_at: string | null; duration_minutes: number | null };
-  problems: { problem_id: string; problem_index: string; points: number }[];
+  problems: { problem_id: string; problem_index: string; points: number; difficulty: number | null }[];
   rows: StandingRow[];
 };
 
@@ -323,8 +359,11 @@ const computeStandings = (contestId: string): Standings | null => {
   >('SELECT id, title, start_at, duration_minutes FROM contests WHERE id = ?').get(contestId);
   if (!contest) return null;
 
-  const problems = db.query<{ problem_id: string; problem_index: string; points: number }, [string]>(
-    'SELECT problem_id, problem_index, points FROM contest_problems WHERE contest_id = ? ORDER BY idx',
+  const problems = db.query<
+    { problem_id: string; problem_index: string; points: number; difficulty: number | null },
+    [string]
+  >(
+    'SELECT problem_id, problem_index, points, difficulty FROM contest_problems WHERE contest_id = ? ORDER BY idx',
   ).all(contestId);
 
   const participants = db.query<{ traq_id: string; atcoder_id: string }, [string]>(
@@ -379,12 +418,29 @@ const computeStandings = (contestId: string): Standings | null => {
       }
     }
 
+    const penaltySeconds = score > 0 ? lastAcRel + PENALTY_PER_WRONG * totalPenalties : 0;
+
+    // パフォーマンス推定: 難易度が分かる問題の解いた/解けなかったパターンから最尤推定。
+    const items = problems
+      .filter((p) => p.difficulty !== null)
+      .map((p) => ({ d: p.difficulty as number, solved: pres[p.problem_id].solved }));
+    let perf = estimatePerformance(items);
+    // 速さによる小さな補正（±最大50）: 速く解いたほど高く。
+    if (perf !== null && score > 0) {
+      const durSec = (contest.duration_minutes ?? 0) * 60;
+      if (durSec > 0) {
+        const usedFrac = Math.min(1, penaltySeconds / durSec);
+        perf += Math.round((0.5 - usedFrac) * 100);
+      }
+    }
+
     rows.push({
       rank: 0,
       traqId: part.traq_id,
       atcoderId: part.atcoder_id,
       score,
-      penaltySeconds: score > 0 ? lastAcRel + PENALTY_PER_WRONG * totalPenalties : 0,
+      penaltySeconds,
+      perf,
       problems: pres,
     });
   }

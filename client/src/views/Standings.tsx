@@ -4,6 +4,18 @@ import { api, fmtDuration, type Standings as StandingsData } from '../api';
 const TRAQ_ICON = (name: string) =>
   `https://q.trap.jp/api/v3/public/icon/${encodeURIComponent(name)}`;
 
+// AtCoderのレート帯色
+const perfColor = (r: number): string => {
+  if (r >= 2800) return '#ff0000';
+  if (r >= 2400) return '#ff8000';
+  if (r >= 2000) return '#c0c000';
+  if (r >= 1600) return '#0000ff';
+  if (r >= 1200) return '#00c0c0';
+  if (r >= 800) return '#008000';
+  if (r >= 400) return '#804000';
+  return '#808080';
+};
+
 export default function Standings({ contestId }: { contestId: string }) {
   const [data, setData] = useState<StandingsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,6 +73,7 @@ export default function Standings({ contestId }: { contestId: string }) {
                 <th className="st-user">参加者</th>
                 <th>得点</th>
                 <th>時間</th>
+                <th>perf</th>
                 {data.problems.map((p) => (
                   <th key={p.problem_id} title={`${p.points}点`}>{p.problem_index}</th>
                 ))}
@@ -78,6 +91,11 @@ export default function Standings({ contestId }: { contestId: string }) {
                   </td>
                   <td className="st-score">{r.score}</td>
                   <td className="st-time">{r.score > 0 ? fmtDuration(r.penaltySeconds) : '-'}</td>
+                  <td className="st-perf">
+                    {r.perf === null ? '-' : (
+                      <span style={{ color: perfColor(r.perf), fontWeight: 700 }}>{r.perf}</span>
+                    )}
+                  </td>
                   {data.problems.map((p) => {
                     const res = r.problems[p.problem_id];
                     if (!res || (!res.solved && res.penalties === 0)) {
