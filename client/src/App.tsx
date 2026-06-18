@@ -14,10 +14,15 @@ function App() {
   const [message, setMessage] = useState('');
 
   const fetchMe = async () => {
-    const res = await fetch(`${API}/api/auth/me`, { credentials: 'include' });
-    const { user } = await res.json() as { user: User | null };
-    setUser(user);
-    setLoading(false);
+    try {
+      const res = await fetch(`${API}/api/auth/me`, { credentials: 'include' });
+      const { user } = await res.json() as { user: User | null };
+      setUser(user);
+    } catch (e) {
+      console.error('fetchMe failed:', e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchMe(); }, []);
