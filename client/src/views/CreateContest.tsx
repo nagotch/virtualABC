@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { api, COLOR_DEFS, type ColorKey } from '../api';
+import { api, COLOR_DEFS, type ColorKey, type ContestMode } from '../api';
 
-type Mode = 'random' | 'color';
+type Mode = ContestMode;
 
 // datetime-local の初期値（ローカル時刻、1時間後を分単位で丸め）
 const defaultStart = (): string => {
@@ -20,10 +20,12 @@ export default function CreateContest() {
   const [colorSpec, setColorSpec] = useState<Record<ColorKey, number>>({
     grey: 0, brown: 0, green: 0, cyan: 0, blue: 0, yellow: 0, orange: 0, red: 0,
   });
+  const [manualText, setManualText] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const colorTotal = Object.values(colorSpec).reduce((a, b) => a + b, 0);
+  const manualLines = manualText.split('\n').map((s) => s.trim()).filter(Boolean);
 
   const setColor = (key: ColorKey, n: number) =>
     setColorSpec((s) => ({ ...s, [key]: Math.max(0, n) }));
@@ -39,7 +41,9 @@ export default function CreateContest() {
     const body =
       mode === 'random'
         ? { ...common, mode, count }
-        : { ...common, mode, colorSpec };
+        : mode === 'color'
+          ? { ...common, mode, colorSpec }
+          : { ...common, mode, urls: manualLines };
     const res = await api.createContest(body);
     setSubmitting(false);
     if ('id' in res) {
@@ -105,9 +109,31 @@ export default function CreateContest() {
           >
             色（難易度）で指定
           </button>
+          <button
+            type="button"
+            className={`seg-btn${mode === 'manual' ? ' active' : ''}`}
+            onClick={() => setMode('manual')}
+          >
+            手動で指定
+          </button>
         </div>
 
-        {mode === 'random' ? (
+        {mode === 'manual' ? (
+          <div className="mode-panel">
+            <label htmlFor="manual">問題を1行に1つ（最大12問）</label>
+            <textarea
+              id="manual"
+              className="text-input"
+              rows={6}
+              value={manualText}
+              onChange={(e) => setManualText(e.target.value)}
+              placeholder={'例（URL または ABC331/D 形式）:\nhttps://atcoder.jp/contests/abc300/tasks/abc300_a\nABC331/D\nabc250 e'}
+            />
+            <p className="hint">
+              現在 {manualLines.length} 問。問題URL、または「ABC331/D」のように指定できます。
+            </p>
+          </div>
+        ) : mode === 'random' ? (
           <div className="mode-panel">
             <label htmlFor="count">問題数</label>
             <input
@@ -148,7 +174,11 @@ export default function CreateContest() {
         <button
           type="submit"
           className="btn btn-primary"
-          disabled={submitting || (mode === 'color' && colorTotal === 0)}
+          disabled={
+            submitting ||
+            (mode === 'color' && colorTotal === 0) ||
+            (mode === 'manual' && manualLines.length === 0)
+          }
         >
           {submitting ? '生成中...' : 'コンテストを作成'}
         </button>

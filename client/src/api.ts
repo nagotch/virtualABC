@@ -26,10 +26,15 @@ export type Problem = {
   url: string;
 };
 
+export type ContestMode = 'random' | 'color' | 'manual';
+
+export const modeLabel = (m: ContestMode | string): string =>
+  m === 'random' ? 'ランダム' : m === 'color' ? '色指定' : m === 'manual' ? '手動' : m;
+
 export type ContestSummary = {
   id: string;
   title: string;
-  mode: 'random' | 'color';
+  mode: ContestMode;
   created_by: string;
   created_at: string;
   start_at: string | null;
@@ -108,9 +113,10 @@ export const api = {
   },
   async createContest(body: {
     title?: string;
-    mode: 'random' | 'color';
+    mode: ContestMode;
     count?: number;
     colorSpec?: Partial<Record<ColorKey, number>>;
+    urls?: string[];
     startAt: string;
     durationMinutes: number;
   }): Promise<{ id: string } | { error: string }> {

@@ -4,6 +4,7 @@ import db from '../db';
 import {
   COLORS,
   generateByColor,
+  generateManual,
   generateRandom,
   type ColorKey,
   type GeneratedProblem,
@@ -30,9 +31,10 @@ const VALID_COLORS = new Set(COLORS.map((c) => c.key));
 
 type CreateBody = {
   title?: string;
-  mode: 'random' | 'color';
+  mode: 'random' | 'color' | 'manual';
   count?: number;                              // random用
   colorSpec?: Partial<Record<ColorKey, number>>; // color用
+  urls?: string[];                             // manual用（問題URLのリスト）
   startAt?: string;                            // ISO8601 開始日時
   durationMinutes?: number;                    // 実施時間（分）
 };
@@ -76,6 +78,14 @@ app.post('/', async (c) => {
       if (total === 0) return c.json({ error: 'no colors specified' }, 400);
       if (total > 12) return c.json({ error: 'too many problems (max 12)' }, 400);
       problems = await generateByColor(spec);
+    } else if (body.mode === 'manual') {
+      const urls = (body.urls ?? []).map((u) => u.trim()).filter(Boolean);
+      if (urls.length === 0) return c.json({ error: 'no urls' }, 400);
+      if (urls.length > 12) return c.json({ error: 'too many problems (max 12)' }, 400);
+      problems = await generateManual(urls);
+      if (problems.length !== urls.length) {
+        return c.json({ error: 'AtCoderの問題URLとして認識できない行があります' }, 400);
+      }
     } else {
       return c.json({ error: 'invalid mode' }, 400);
     }

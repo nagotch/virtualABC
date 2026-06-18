@@ -1,16 +1,23 @@
 // AtCoder Problems API のデータ取得・キャッシュと問題セット生成
+//
+// データソース:
+// - contest-problem.json : コンテストと問題の対応（権威ある index 情報）
+// - problems.json        : 問題のタイトル(name)
+// - problem-models.json  : 推定難易度(difficulty)
+//
+// 注意: problems.json は問題idが再利用コンテスト(ADT等)に再割当てされ
+// contest_id/problem_index が元のABCとずれることがあるため、コンテスト所属と
+// indexの判定には必ず contest-problem.json を使う。
 
 const BASE = 'https://kenkoooo.com/atcoder/resources';
 const UA = 'virtualABC/0.1 (traP internal tool)';
 
-export type Problem = {
-  id: string;          // 問題ID 例: abc300_a
-  contest_id: string;  // コンテストID 例: abc300
-  problem_index: string; // 問題インデックス 例: A
-  name: string;
-  title: string;
+type ContestProblem = {
+  contest_id: string;
+  problem_id: string;
+  problem_index: string;
 };
-
+type ProblemMeta = { id: string; name: string; title: string };
 type ProblemModel = { difficulty?: number };
 type ModelMap = Record<string, ProblemModel>;
 
@@ -31,7 +38,8 @@ export type ColorKey = (typeof COLORS)[number]['key'];
 // ---- キャッシュ（メモリ） ----
 type Cache<T> = { data: T; fetchedAt: number };
 const TTL = 6 * 60 * 60 * 1000; // 6時間
-let problemsCache: Cache<Problem[]> | null = null;
+let cpCache: Cache<ContestProblem[]> | null = null;
+let metaCache: Cache<Map<string, ProblemMeta>> | null = null;
 let modelsCache: Cache<ModelMap> | null = null;
 
 const fetchJson = async <T>(path: string): Promise<T> => {
@@ -42,34 +50,51 @@ const fetchJson = async <T>(path: string): Promise<T> => {
   return res.json() as Promise<T>;
 };
 
-const getProblems = async (): Promise<Problem[]> => {
-  if (problemsCache && Date.now() - problemsCache.fetchedAt < TTL) {
-    return problemsCache.data;
-  }
-  const data = await fetchJson<Problem[]>('problems.json');
-  problemsCache = { data, fetchedAt: Date.now() };
+const getContestProblems = async (): Promise<ContestProblem[]> => {
+  if (cpCache && Date.now() - cpCache.fetchedAt < TTL) return cpCache.data;
+  const data = await fetchJson<ContestProblem[]>('contest-problem.json');
+  cpCache = { data, fetchedAt: Date.now() };
   return data;
 };
 
+const getMeta = async (): Promise<Map<string, ProblemMeta>> => {
+  if (metaCache && Date.now() - metaCache.fetchedAt < TTL) return metaCache.data;
+  const arr = await fetchJson<ProblemMeta[]>('problems.json');
+  const map = new Map(arr.map((p) => [p.id, p]));
+  metaCache = { data: map, fetchedAt: Date.now() };
+  return map;
+};
+
 const getModels = async (): Promise<ModelMap> => {
-  if (modelsCache && Date.now() - modelsCache.fetchedAt < TTL) {
-    return modelsCache.data;
-  }
+  if (modelsCache && Date.now() - modelsCache.fetchedAt < TTL) return modelsCache.data;
   const data = await fetchJson<ModelMap>('problem-models.json');
   modelsCache = { data, fetchedAt: Date.now() };
   return data;
 };
 
-// 出題対象の問題（ABCのみ）。difficulty を付与して返す。
-export type EnrichedProblem = Problem & { difficulty: number | null };
+// 出題対象の正規化された問題（ABCのみ）
+export type EnrichedProblem = {
+  problem_id: string;
+  contest_id: string;
+  problem_index: string;
+  name: string;
+  difficulty: number | null; // 生のdifficulty
+};
+
+const isAbc = (contestId: string): boolean => /^abc\d+$/.test(contestId);
 
 const getAbcProblems = async (): Promise<EnrichedProblem[]> => {
-  const [problems, models] = await Promise.all([getProblems(), getModels()]);
-  return problems
-    .filter((p) => p.contest_id.startsWith('abc'))
-    .map((p) => ({
-      ...p,
-      difficulty: models[p.id]?.difficulty ?? null,
+  const [cps, meta, models] = await Promise.all([
+    getContestProblems(), getMeta(), getModels(),
+  ]);
+  return cps
+    .filter((cp) => isAbc(cp.contest_id))
+    .map((cp) => ({
+      problem_id: cp.problem_id,
+      contest_id: cp.contest_id,
+      problem_index: cp.problem_index,
+      name: meta.get(cp.problem_id)?.name ?? cp.problem_id,
+      difficulty: models[cp.problem_id]?.difficulty ?? null,
     }));
 };
 
@@ -102,7 +127,7 @@ export type GeneratedProblem = {
   contest_id: string;
   problem_index: string;
   title: string;
-  difficulty: number | null;
+  difficulty: number | null; // 補正済み
   color: ColorKey | null;
   url: string;
 };
@@ -110,13 +135,13 @@ export type GeneratedProblem = {
 const toGenerated = (p: EnrichedProblem): GeneratedProblem => {
   const diff = p.difficulty === null ? null : correctDifficulty(p.difficulty);
   return {
-    id: p.id,
+    id: p.problem_id,
     contest_id: p.contest_id,
     problem_index: p.problem_index,
-    title: p.title,
+    title: p.name,
     difficulty: diff,
     color: diff === null ? null : colorOf(diff),
-    url: `https://atcoder.jp/contests/${p.contest_id}/tasks/${p.id}`,
+    url: `https://atcoder.jp/contests/${p.contest_id}/tasks/${p.problem_id}`,
   };
 };
 
@@ -125,7 +150,6 @@ const toGenerated = (p: EnrichedProblem): GeneratedProblem => {
 // 問題からランダムに選ぶ（本番ABCに近い難易度カーブになる）。
 export const generateRandom = async (count: number): Promise<GeneratedProblem[]> => {
   const pool = await getAbcProblems();
-  // 問題インデックス(A,B,C…)ごとにグループ化
   const byIndex = new Map<string, EnrichedProblem[]>();
   for (const p of pool) {
     const key = p.problem_index.toUpperCase();
@@ -136,7 +160,7 @@ export const generateRandom = async (count: number): Promise<GeneratedProblem[]>
   for (let i = 0; i < count; i++) {
     const letter = String.fromCharCode(65 + i); // A, B, C, ...
     const candidates = byIndex.get(letter);
-    if (!candidates || candidates.length === 0) continue; // その位置の問題が無ければスキップ
+    if (!candidates || candidates.length === 0) continue;
     result.push(...sample(candidates, 1).map(toGenerated));
   }
   return result;
@@ -154,8 +178,80 @@ export const generateByColor = async (
     const candidates = pool.filter((p) => colorOf(p.difficulty as number) === key);
     result.push(...sample(candidates, count).map(toGenerated));
   }
-  // 難易度順に並べる（未設定は末尾）
   return result.sort(
     (a, b) => (a.difficulty ?? Infinity) - (b.difficulty ?? Infinity),
   );
+};
+
+// AtCoderの問題URLから contest_id と problem_id を取り出す
+const parseAtcoderUrl = (
+  url: string,
+): { contest_id: string; problem_id: string } | null => {
+  const m = url.match(/atcoder\.jp\/contests\/([^/]+)\/tasks\/([^/?#\s]+)/);
+  if (!m) return null;
+  return { contest_id: m[1], problem_id: m[2] };
+};
+
+// ショートハンド "ABC331/D" / "abc331 d" / "abc331-d" を contest_id と index に
+const parseShorthand = (
+  spec: string,
+): { contest_id: string; problem_index: string } | null => {
+  const m = spec.match(/^([A-Za-z]+\d+)\s*[/_\- ]\s*([A-Za-z0-9]+)$/);
+  if (!m) return null;
+  return { contest_id: m[1].toLowerCase(), problem_index: m[2].toUpperCase() };
+};
+
+// problem_id から index を推定（"abc300_a" → "A"）。contest-problemに無い時のfallback
+const deriveIndex = (problemId: string): string => {
+  const seg = problemId.split('_').pop() ?? problemId;
+  return seg.toUpperCase();
+};
+
+// 方式3: 手動。問題URLまたは "ABC331/D" 形式のリストから問題セットを作る。
+// 解釈できなかった行は結果に含めない（呼び出し側で件数チェック可能）。
+export const generateManual = async (specs: string[]): Promise<GeneratedProblem[]> => {
+  const [cps, meta, models] = await Promise.all([
+    getContestProblems(), getMeta(), getModels(),
+  ]);
+  // contest_id/index → ContestProblem（ショートハンド用）
+  const byCI = new Map<string, ContestProblem>();
+  // contest_id/problem_id → index（URLのindex確定用）
+  const byCP = new Map<string, string>();
+  for (const cp of cps) {
+    byCI.set(`${cp.contest_id.toLowerCase()}/${cp.problem_index.toUpperCase()}`, cp);
+    byCP.set(`${cp.contest_id}/${cp.problem_id}`, cp.problem_index);
+  }
+
+  const build = (problemId: string, contestId: string, index: string): GeneratedProblem => {
+    const raw = models[problemId]?.difficulty ?? null;
+    const diff = raw === null ? null : correctDifficulty(raw);
+    return {
+      id: problemId,
+      contest_id: contestId,
+      problem_index: index,
+      title: meta.get(problemId)?.name ?? problemId,
+      difficulty: diff,
+      color: diff === null ? null : colorOf(diff),
+      url: `https://atcoder.jp/contests/${contestId}/tasks/${problemId}`,
+    };
+  };
+
+  const result: GeneratedProblem[] = [];
+  for (const raw of specs) {
+    const spec = raw.trim();
+    const url = parseAtcoderUrl(spec);
+    if (url) {
+      const index = byCP.get(`${url.contest_id}/${url.problem_id}`) ?? deriveIndex(url.problem_id);
+      result.push(build(url.problem_id, url.contest_id, index));
+      continue;
+    }
+    const sh = parseShorthand(spec);
+    if (sh) {
+      const cp = byCI.get(`${sh.contest_id}/${sh.problem_index}`);
+      if (cp) result.push(build(cp.problem_id, cp.contest_id, cp.problem_index));
+      continue;
+    }
+    // どちらにも当てはまらない行はスキップ
+  }
+  return result;
 };

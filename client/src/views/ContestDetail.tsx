@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, endIso, fmtDateTime, type ContestDetail as Detail } from '../api';
+import { api, endIso, fmtDateTime, modeLabel, type ContestDetail as Detail } from '../api';
 import DifficultyCircle from '../components/DifficultyCircle';
 
 export default function ContestDetail({ id, meId }: { id: string; meId: string }) {
@@ -52,7 +52,7 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
         （{data.contest.duration_minutes ?? '?'}分）
       </p>
       <p className="hint">
-        作成: @{data.contest.created_by} ・ {data.contest.mode === 'random' ? 'ランダム' : '色指定'}
+        作成: @{data.contest.created_by} ・ {modeLabel(data.contest.mode)}
       </p>
 
       <table className="problem-table">

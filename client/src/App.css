@@ -188,6 +188,12 @@ input[type='text'],
   box-shadow: 0 0 0 3px var(--accent-bg);
 }
 
+textarea.text-input {
+  font-family: var(--mono);
+  resize: vertical;
+  line-height: 1.5;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

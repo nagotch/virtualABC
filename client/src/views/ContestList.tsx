@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, fmtDateTime, type ContestSummary } from '../api';
+import { api, fmtDateTime, modeLabel, type ContestSummary } from '../api';
 
 export default function ContestList() {
   const [contests, setContests] = useState<ContestSummary[] | null>(null);
@@ -29,7 +29,7 @@ export default function ContestList() {
                   🗓 {fmtDateTime(c.start_at)} ・ {c.duration_minutes ?? '?'}分
                 </span>
                 <span className="contest-meta">
-                  {c.problem_count}問 ・ @{c.created_by} ・ {c.mode === 'random' ? 'ランダム' : '色指定'}
+                  {c.problem_count}問 ・ @{c.created_by} ・ {modeLabel(c.mode)}
                 </span>
               </a>
             </li>
