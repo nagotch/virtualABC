@@ -35,6 +35,18 @@ db.run(`
   )
 `);
 
+// 開催日時・実施時間カラムを追加（旧版から移行）
+const curCols = db
+  .query<{ name: string }, []>("PRAGMA table_info(contests)")
+  .all()
+  .map((r) => r.name);
+if (!curCols.includes('start_at')) {
+  db.run("ALTER TABLE contests ADD COLUMN start_at TEXT");          // ISO8601 (UTC)
+}
+if (!curCols.includes('duration_minutes')) {
+  db.run("ALTER TABLE contests ADD COLUMN duration_minutes INTEGER");
+}
+
 db.run(`
   CREATE TABLE IF NOT EXISTS contest_problems (
     contest_id      TEXT NOT NULL,

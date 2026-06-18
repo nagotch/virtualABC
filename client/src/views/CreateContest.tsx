@@ -3,8 +3,18 @@ import { api, COLOR_DEFS, type ColorKey } from '../api';
 
 type Mode = 'random' | 'color';
 
+// datetime-local の初期値（ローカル時刻、1時間後を分単位で丸め）
+const defaultStart = (): string => {
+  const d = new Date(Date.now() + 60 * 60 * 1000);
+  d.setSeconds(0, 0);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 export default function CreateContest() {
   const [title, setTitle] = useState('');
+  const [startAt, setStartAt] = useState(defaultStart);
+  const [duration, setDuration] = useState(100);
   const [mode, setMode] = useState<Mode>('random');
   const [count, setCount] = useState(6);
   const [colorSpec, setColorSpec] = useState<Record<ColorKey, number>>({
@@ -21,11 +31,15 @@ export default function CreateContest() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!startAt) { setError('開始日時を指定してください'); return; }
     setSubmitting(true);
+    // datetime-local はローカル時刻。ISO(UTC)に変換して送る
+    const startIso = new Date(startAt).toISOString();
+    const common = { title, startAt: startIso, durationMinutes: duration };
     const body =
       mode === 'random'
-        ? { title, mode, count }
-        : { title, mode, colorSpec };
+        ? { ...common, mode, count }
+        : { ...common, mode, colorSpec };
     const res = await api.createContest(body);
     setSubmitting(false);
     if ('id' in res) {
@@ -49,6 +63,31 @@ export default function CreateContest() {
           onChange={(e) => setTitle(e.target.value)}
           placeholder="例: traP水曜バチャ"
         />
+
+        <div className="row-2">
+          <div>
+            <label htmlFor="startAt">開始日時</label>
+            <input
+              id="startAt"
+              type="datetime-local"
+              className="text-input"
+              value={startAt}
+              onChange={(e) => setStartAt(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="duration">実施時間（分）</label>
+            <input
+              id="duration"
+              type="number"
+              min={1}
+              max={1440}
+              className="text-input"
+              value={duration}
+              onChange={(e) => setDuration(Math.min(1440, Math.max(1, Number(e.target.value) || 1)))}
+            />
+          </div>
+        </div>
 
         <label style={{ marginTop: 20 }}>出題方式</label>
         <div className="seg">

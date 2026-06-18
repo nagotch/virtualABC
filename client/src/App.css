@@ -363,6 +363,19 @@ input[type='text'],
   margin-top: 16px;
 }
 
+.row-2 {
+  display: grid;
+  grid-template-columns: 1fr 140px;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 480px) {
+  .row-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---- color grid ---- */
 .color-grid {
   display: grid;

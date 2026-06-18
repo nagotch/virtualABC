@@ -32,6 +32,8 @@ export type ContestSummary = {
   mode: 'random' | 'color';
   created_by: string;
   created_at: string;
+  start_at: string | null;
+  duration_minutes: number | null;
   problem_count: number;
 };
 
@@ -57,6 +59,22 @@ export const colorHex = (key: ColorKey | null): string =>
 
 export const colorLabel = (key: ColorKey | null): string =>
   COLOR_DEFS.find((c) => c.key === key)?.label ?? '?';
+
+// ISO日時をJST表記に
+export const fmtDateTime = (iso: string | null): string => {
+  if (!iso) return '日時未設定';
+  return new Date(iso).toLocaleString('ja-JP', {
+    month: 'numeric', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+    weekday: 'short',
+  });
+};
+
+// 開始＋実施時間から終了時刻のISOを求める
+export const endIso = (startIso: string | null, minutes: number | null): string | null => {
+  if (!startIso || !minutes) return null;
+  return new Date(new Date(startIso).getTime() + minutes * 60_000).toISOString();
+};
 
 export const api = {
   async me(): Promise<User | null> {
@@ -93,6 +111,8 @@ export const api = {
     mode: 'random' | 'color';
     count?: number;
     colorSpec?: Partial<Record<ColorKey, number>>;
+    startAt: string;
+    durationMinutes: number;
   }): Promise<{ id: string } | { error: string }> {
     const res = await fetch(`${API}/api/contests`, {
       method: 'POST',

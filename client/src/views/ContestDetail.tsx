@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type ContestDetail as Detail } from '../api';
+import { api, endIso, fmtDateTime, type ContestDetail as Detail } from '../api';
 import DifficultyCircle from '../components/DifficultyCircle';
 
 export default function ContestDetail({ id, meId }: { id: string; meId: string }) {
@@ -47,6 +47,10 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
         <h1>{data.contest.title}</h1>
         <a className="btn btn-ghost btn-inline" href="#/contests">一覧</a>
       </div>
+      <p className="hint">
+        🗓 {fmtDateTime(data.contest.start_at)} 〜 {fmtDateTime(endIso(data.contest.start_at, data.contest.duration_minutes))}
+        （{data.contest.duration_minutes ?? '?'}分）
+      </p>
       <p className="hint">
         作成: @{data.contest.created_by} ・ {data.contest.mode === 'random' ? 'ランダム' : '色指定'}
       </p>

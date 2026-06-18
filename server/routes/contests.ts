@@ -8,6 +8,7 @@ import {
   type ColorKey,
   type GeneratedProblem,
 } from '../atcoder';
+import { notifyContestCreated } from '../notify';
 
 const app = new Hono();
 
@@ -32,6 +33,8 @@ type CreateBody = {
   mode: 'random' | 'color';
   count?: number;                              // random用
   colorSpec?: Partial<Record<ColorKey, number>>; // color用
+  startAt?: string;                            // ISO8601 開始日時
+  durationMinutes?: number;                    // 実施時間（分）
 };
 
 // POST /api/contests → コンテスト作成（問題セット生成）
@@ -45,6 +48,17 @@ app.post('/', async (c) => {
   } catch {
     return c.json({ error: 'invalid body' }, 400);
   }
+
+  // 開催日時・実施時間のバリデーション
+  const startDate = body.startAt ? new Date(body.startAt) : null;
+  if (!startDate || Number.isNaN(startDate.getTime())) {
+    return c.json({ error: 'invalid startAt' }, 400);
+  }
+  const duration = Math.floor(Number(body.durationMinutes));
+  if (!Number.isFinite(duration) || duration < 1 || duration > 1440) {
+    return c.json({ error: 'invalid durationMinutes (1-1440)' }, 400);
+  }
+  const startAtIso = startDate.toISOString();
 
   let problems: GeneratedProblem[];
   try {
@@ -78,7 +92,7 @@ app.post('/', async (c) => {
   const title = (body.title?.trim() || `Virtual ABC ${new Date().toLocaleDateString('ja-JP')}`).slice(0, 100);
 
   const insertContest = db.prepare(
-    'INSERT INTO contests (id, title, mode, created_by) VALUES (?, ?, ?, ?)',
+    'INSERT INTO contests (id, title, mode, created_by, start_at, duration_minutes) VALUES (?, ?, ?, ?, ?, ?)',
   );
   const insertProblem = db.prepare(
     `INSERT INTO contest_problems
@@ -87,7 +101,7 @@ app.post('/', async (c) => {
   );
 
   const tx = db.transaction(() => {
-    insertContest.run(id, title, body.mode, traqId);
+    insertContest.run(id, title, body.mode, traqId, startAtIso, duration);
     problems.forEach((p, i) => {
       insertProblem.run(
         id, i, p.id, p.contest_id, p.problem_index, p.title, p.difficulty, p.color, p.url,
@@ -96,21 +110,31 @@ app.post('/', async (c) => {
   });
   tx();
 
-  return c.json({ id, title, mode: body.mode, problems });
+  // traQへ通知（ベストエフォート）
+  void notifyContestCreated({
+    id, title,
+    startAt: startAtIso,
+    durationMinutes: duration,
+    problemCount: problems.length,
+    createdBy: traqId,
+  });
+
+  return c.json({ id, title, mode: body.mode, startAt: startAtIso, durationMinutes: duration, problems });
 });
 
 // GET /api/contests → 一覧（新しい順）
 app.get('/', (c) => {
   const rows = db.query<
-    { id: string; title: string; mode: string; created_by: string; created_at: string; problem_count: number },
+    { id: string; title: string; mode: string; created_by: string; created_at: string; start_at: string | null; duration_minutes: number | null; problem_count: number },
     []
   >(`
     SELECT c.id, c.title, c.mode, c.created_by, c.created_at,
+           c.start_at, c.duration_minutes,
            COUNT(p.idx) AS problem_count
     FROM contests c
     LEFT JOIN contest_problems p ON p.contest_id = c.id
     GROUP BY c.id
-    ORDER BY c.created_at DESC
+    ORDER BY c.start_at DESC
   `).all();
   return c.json({ contests: rows });
 });
@@ -119,9 +143,9 @@ app.get('/', (c) => {
 app.get('/:id', (c) => {
   const id = c.req.param('id');
   const contest = db.query<
-    { id: string; title: string; mode: string; created_by: string; created_at: string },
+    { id: string; title: string; mode: string; created_by: string; created_at: string; start_at: string | null; duration_minutes: number | null },
     [string]
-  >('SELECT id, title, mode, created_by, created_at FROM contests WHERE id = ?').get(id);
+  >('SELECT id, title, mode, created_by, created_at, start_at, duration_minutes FROM contests WHERE id = ?').get(id);
   if (!contest) return c.json({ error: 'not found' }, 404);
 
   const problems = db.query<
