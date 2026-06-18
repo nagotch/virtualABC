@@ -114,17 +114,20 @@
     return null;
   }
 
-  // time要素から提出時刻(unix秒)を推定（JST想定、失敗時は現在時刻）
+  // 提出時刻(unix秒)を取得。
+  // 提出詳細ページの time 要素は3つ（コンテスト開始/終了/提出）あり、
+  // 提出時刻は class="fixtime-second"。これを狙って取得する。
+  // タイムゾーン表記(+0900 等)があればそれを尊重し、無ければJST想定。失敗時は現在時刻。
   function parseEpochSecond(scope) {
-    const timeEl = scope.querySelector('time');
-    const text = timeEl ? timeEl.textContent.trim() : '';
-    const m = text.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
-    if (m) {
-      const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}+09:00`;
-      const t = Date.parse(iso);
-      if (!Number.isNaN(t)) return Math.floor(t / 1000);
-    }
-    return Math.floor(Date.now() / 1000);
+    const el = scope.querySelector('time.fixtime-second') || scope.querySelector('time');
+    const text = (el ? el.textContent : '').trim().replace(/\//g, '-');
+    const m = text.match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})\s*([+-]\d{2}:?\d{2}|Z)?/);
+    if (!m) return Math.floor(Date.now() / 1000);
+    let off = m[7] || '+0900';
+    if (off === 'Z') off = '+0000';
+    if (!off.includes(':')) off = off.slice(0, 3) + ':' + off.slice(3); // +0900 -> +09:00
+    const t = Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}${off}`);
+    return Number.isNaN(t) ? Math.floor(Date.now() / 1000) : Math.floor(t / 1000);
   }
 
   function reportToVABC(payload, onOk, onErr) {
