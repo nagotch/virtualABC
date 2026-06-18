@@ -607,21 +607,40 @@ code {
 .standings-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .standings-table th,
 .standings-table td {
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+  border: 1px solid var(--border);
   text-align: center;
   white-space: nowrap;
 }
 
-.standings-table th {
+.standings-table thead th {
+  background: var(--bg);
   color: var(--text-muted);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
+}
+
+/* 問題ヘッダ: 記号＋配点 */
+.st-prob-h {
+  min-width: 56px;
+}
+.st-prob-letter {
+  display: block;
+  color: var(--text-h);
+  font-weight: 700;
+  font-size: 13px;
+}
+.st-prob-pts {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .st-user {
@@ -633,34 +652,52 @@ code {
   color: var(--text-h);
 }
 
-.st-score {
+/* 総合（得点＋時間） */
+.st-total {
+  background: var(--bg);
+}
+.st-total-score {
+  display: block;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text-h);
+  font-size: 14px;
 }
-
-.st-time {
+.st-total-time {
+  display: block;
   color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
+  font-size: 11px;
 }
 
+/* 問題セル */
 .st-cell {
-  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.st-cell-score {
+  display: block;
+  font-weight: 700;
+}
+.st-cell-time {
+  display: block;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
+/* AC: 緑背景＋緑文字（AtCoder風） */
 .st-ac {
-  color: #16a34a;
-  font-weight: 600;
+  background: rgba(34, 197, 94, 0.15);
+}
+.st-ac .st-cell-score {
+  color: #1a9e4b;
 }
 
-.st-wa {
+/* 未正解（誤答あり）: 赤 */
+.st-wa .st-cell-score {
   color: #ef4444;
 }
 
 .st-pen {
-  color: #ef4444;
+  font-weight: 700;
   font-size: 11px;
-  margin-left: 2px;
 }
 
 .diff-circle {

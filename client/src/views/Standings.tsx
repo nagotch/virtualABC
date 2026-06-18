@@ -69,14 +69,16 @@ export default function Standings({ contestId }: { contestId: string }) {
           <table className="standings-table">
             <thead>
               <tr>
-                <th>順位</th>
+                <th className="st-rank-h">順位</th>
                 <th className="st-user">参加者</th>
-                <th>得点</th>
-                <th>時間</th>
-                <th>perf</th>
-                {data.problems.map((p) => (
-                  <th key={p.problem_id} title={`${p.points}点`}>{p.problem_index}</th>
+                <th className="st-total-h">得点</th>
+                {data.problems.map((p, i) => (
+                  <th key={p.problem_id} className="st-prob-h">
+                    <span className="st-prob-letter">{String.fromCharCode(65 + i)}</span>
+                    <span className="st-prob-pts">{p.points}</span>
+                  </th>
                 ))}
+                <th className="st-perf-h">perf</th>
               </tr>
             </thead>
             <tbody>
@@ -89,32 +91,37 @@ export default function Standings({ contestId }: { contestId: string }) {
                       @{r.traqId}
                     </span>
                   </td>
-                  <td className="st-score">{r.score}</td>
-                  <td className="st-time">{r.score > 0 ? fmtDuration(r.penaltySeconds) : '-'}</td>
-                  <td className="st-perf">
-                    {r.perf === null ? '-' : (
-                      <span style={{ color: perfColor(r.perf), fontWeight: 700 }}>{r.perf}</span>
-                    )}
+                  <td className="st-total">
+                    <span className="st-total-score">{r.score}</span>
+                    <span className="st-total-time">{r.score > 0 ? fmtDuration(r.penaltySeconds) : '-'}</span>
                   </td>
                   {data.problems.map((p) => {
                     const res = r.problems[p.problem_id];
                     if (!res || (!res.solved && res.penalties === 0)) {
-                      return <td key={p.problem_id} className="st-cell">-</td>;
+                      return <td key={p.problem_id} className="st-cell" />;
                     }
                     if (res.solved) {
                       return (
                         <td key={p.problem_id} className="st-cell st-ac">
-                          {fmtDuration(res.acTimeSeconds ?? 0)}
-                          {res.penalties > 0 && <span className="st-pen">({res.penalties})</span>}
+                          <span className="st-cell-score">
+                            {p.points}
+                            {res.penalties > 0 && <span className="st-pen"> ({res.penalties})</span>}
+                          </span>
+                          <span className="st-cell-time">{fmtDuration(res.acTimeSeconds ?? 0)}</span>
                         </td>
                       );
                     }
                     return (
                       <td key={p.problem_id} className="st-cell st-wa">
-                        ({res.penalties})
+                        <span className="st-cell-score">({res.penalties})</span>
                       </td>
                     );
                   })}
+                  <td className="st-perf">
+                    {r.perf === null ? '-' : (
+                      <span style={{ color: perfColor(r.perf), fontWeight: 700 }}>{r.perf}</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
