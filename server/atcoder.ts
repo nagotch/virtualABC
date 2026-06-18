@@ -110,10 +110,26 @@ const toGenerated = (p: EnrichedProblem): GeneratedProblem => ({
   url: `https://atcoder.jp/contests/${p.contest_id}/tasks/${p.id}`,
 });
 
-// 方式1: 過去ABCから問題ごとにランダムにcount問
+// 方式1: 過去ABCから問題ごとにランダム。
+// A問題はA問題から、B問題はB問題から…と、各スロットを同じ問題インデックスの
+// 問題からランダムに選ぶ（本番ABCに近い難易度カーブになる）。
 export const generateRandom = async (count: number): Promise<GeneratedProblem[]> => {
   const pool = await getAbcProblems();
-  return sample(pool, count).map(toGenerated);
+  // 問題インデックス(A,B,C…)ごとにグループ化
+  const byIndex = new Map<string, EnrichedProblem[]>();
+  for (const p of pool) {
+    const key = p.problem_index.toUpperCase();
+    (byIndex.get(key) ?? byIndex.set(key, []).get(key)!).push(p);
+  }
+
+  const result: GeneratedProblem[] = [];
+  for (let i = 0; i < count; i++) {
+    const letter = String.fromCharCode(65 + i); // A, B, C, ...
+    const candidates = byIndex.get(letter);
+    if (!candidates || candidates.length === 0) continue; // その位置の問題が無ければスキップ
+    result.push(...sample(candidates, 1).map(toGenerated));
+  }
+  return result;
 };
 
 // 方式2: 色ごとに指定数。spec例: { cyan: 2, green: 1 }
