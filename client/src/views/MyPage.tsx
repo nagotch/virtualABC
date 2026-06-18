@@ -118,6 +118,16 @@ export default function MyPage({
           AtCoder IDを変更
         </button>
       )}
+
+      {registered && (
+        <div className="token-section">
+          <h2 className="section-title">📝 リアルタイム順位表の使い方</h2>
+          <p className="hint">
+            ユーザースクリプト(Tampermonkey)を入れると、AtCoderでの提出結果が自動で順位表に反映されます。
+            スクリプトはログイン中のAtCoder IDを自動取得するので、設定は不要です。
+          </p>
+        </div>
+      )}
     </div>
   );
 }

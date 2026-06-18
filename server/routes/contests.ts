@@ -106,8 +106,8 @@ app.post('/', async (c) => {
   );
   const insertProblem = db.prepare(
     `INSERT INTO contest_problems
-       (contest_id, idx, problem_id, atcoder_contest, problem_index, title, difficulty, color, url)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (contest_id, idx, problem_id, atcoder_contest, problem_index, title, difficulty, color, url, points)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
   const tx = db.transaction(() => {
@@ -115,6 +115,7 @@ app.post('/', async (c) => {
     problems.forEach((p, i) => {
       insertProblem.run(
         id, i, p.id, p.contest_id, p.problem_index, p.title, p.difficulty, p.color, p.url,
+        (i + 1) * 100, // 配点: A=100, B=200, ...
       );
     });
   });
@@ -159,14 +160,61 @@ app.get('/:id', (c) => {
   if (!contest) return c.json({ error: 'not found' }, 404);
 
   const problems = db.query<
-    { idx: number; problem_id: string; atcoder_contest: string; problem_index: string; title: string; difficulty: number | null; color: string | null; url: string },
+    { idx: number; problem_id: string; atcoder_contest: string; problem_index: string; title: string; difficulty: number | null; color: string | null; url: string; points: number },
     [string]
   >(`
-    SELECT idx, problem_id, atcoder_contest, problem_index, title, difficulty, color, url
+    SELECT idx, problem_id, atcoder_contest, problem_index, title, difficulty, color, url, points
     FROM contest_problems WHERE contest_id = ? ORDER BY idx
   `).all(id);
 
-  return c.json({ contest, problems });
+  const participants = db.query<{ traq_id: string; atcoder_id: string }, [string]>(
+    'SELECT traq_id, atcoder_id FROM participants WHERE contest_id = ?',
+  ).all(id);
+
+  return c.json({ contest, problems, participants });
+});
+
+// POST /api/contests/:id/join → 参加（AtCoder ID登録済みが必要）
+app.post('/:id/join', (c) => {
+  const traqId = getTraqId(getCookie(c, 'session'));
+  if (!traqId) return c.json({ error: 'unauthorized' }, 401);
+
+  const id = c.req.param('id');
+  const contest = db.query<{ id: string }, [string]>(
+    'SELECT id FROM contests WHERE id = ?',
+  ).get(id);
+  if (!contest) return c.json({ error: 'not found' }, 404);
+
+  const user = db.query<{ atcoder_id: string }, [string]>(
+    'SELECT atcoder_id FROM users WHERE traq_id = ?',
+  ).get(traqId);
+  if (!user?.atcoder_id) return c.json({ error: 'atcoder id not registered' }, 400);
+
+  db.run(
+    'INSERT OR REPLACE INTO participants (contest_id, traq_id, atcoder_id) VALUES (?, ?, ?)',
+    [id, traqId, user.atcoder_id],
+  );
+  standingsCache.delete(id);
+  return c.json({ ok: true });
+});
+
+// POST /api/contests/:id/leave → 参加取り消し
+app.post('/:id/leave', (c) => {
+  const traqId = getTraqId(getCookie(c, 'session'));
+  if (!traqId) return c.json({ error: 'unauthorized' }, 401);
+
+  const id = c.req.param('id');
+  db.run('DELETE FROM participants WHERE contest_id = ? AND traq_id = ?', [id, traqId]);
+  standingsCache.delete(id);
+  return c.json({ ok: true });
+});
+
+// GET /api/contests/:id/standings → 順位表（開催時間内の提出で集計）
+app.get('/:id/standings', (c) => {
+  const id = c.req.param('id');
+  const standings = computeStandings(id);
+  if (!standings) return c.json({ error: 'not found' }, 404);
+  return c.json(standings);
 });
 
 // DELETE /api/contests/:id → 作成者のみ削除可能
@@ -190,5 +238,130 @@ app.delete('/:id', (c) => {
 
   return c.json({ ok: true });
 });
+
+// ---- 順位表の集計 ----
+// 提出データはユーザースクリプト(reported_submissions)から取得する。
+// 各参加者がAtCoderにログイン済みのブラウザで提出すると、スクリプトが結果を
+// このサーバーに報告する。AtCoder Problemsのクロール遅延に依存しない。
+
+const PENALTY_PER_WRONG = 5 * 60; // 1誤答あたり5分（秒）
+
+type ProblemResult = {
+  solved: boolean;
+  penalties: number;        // AC前の誤答数
+  acTimeSeconds: number | null; // 開始からの相対秒
+};
+type StandingRow = {
+  rank: number;
+  traqId: string;
+  atcoderId: string;
+  score: number;
+  penaltySeconds: number;
+  problems: Record<string, ProblemResult>;
+};
+type Standings = {
+  contest: { id: string; title: string; start_at: string | null; duration_minutes: number | null };
+  problems: { problem_id: string; problem_index: string; points: number }[];
+  rows: StandingRow[];
+};
+
+type ReportedSub = { problem_id: string; result: string; epoch_second: number };
+
+// 報告された提出はDBから即時に読めるのでキャッシュは不要だが、
+// 提出報告時にキャッシュを無効化するための仕組みは維持する。
+const standingsCache = new Map<string, { at: number; data: Standings }>();
+const STANDINGS_TTL = 5 * 1000;
+
+// あるAtCoder IDが参加するコンテストの順位表キャッシュを無効化
+export const invalidateStandingsForAtcoder = (atcoderId: string): void => {
+  const contestIds = db.query<{ contest_id: string }, [string]>(
+    'SELECT contest_id FROM participants WHERE atcoder_id = ?',
+  ).all(atcoderId);
+  for (const { contest_id } of contestIds) standingsCache.delete(contest_id);
+};
+
+const computeStandings = (contestId: string): Standings | null => {
+  const cached = standingsCache.get(contestId);
+  if (cached && Date.now() - cached.at < STANDINGS_TTL) return cached.data;
+
+  const contest = db.query<
+    { id: string; title: string; start_at: string | null; duration_minutes: number | null },
+    [string]
+  >('SELECT id, title, start_at, duration_minutes FROM contests WHERE id = ?').get(contestId);
+  if (!contest) return null;
+
+  const problems = db.query<{ problem_id: string; problem_index: string; points: number }, [string]>(
+    'SELECT problem_id, problem_index, points FROM contest_problems WHERE contest_id = ? ORDER BY idx',
+  ).all(contestId);
+
+  const participants = db.query<{ traq_id: string; atcoder_id: string }, [string]>(
+    'SELECT traq_id, atcoder_id FROM participants WHERE contest_id = ?',
+  ).all(contestId);
+
+  const startUnix = contest.start_at ? Math.floor(new Date(contest.start_at).getTime() / 1000) : 0;
+  const endUnix = startUnix + (contest.duration_minutes ?? 0) * 60;
+  const problemIds = new Set(problems.map((p) => p.problem_id));
+  const pointsOf = new Map(problems.map((p) => [p.problem_id, p.points]));
+
+  const querySubs = db.query<ReportedSub, [string, number, number]>(
+    `SELECT problem_id, result, epoch_second FROM reported_submissions
+     WHERE atcoder_id = ? AND epoch_second BETWEEN ? AND ? ORDER BY epoch_second`,
+  );
+
+  const rows: StandingRow[] = [];
+  for (const part of participants) {
+    const subs = querySubs.all(part.atcoder_id, startUnix, endUnix)
+      .filter((s) => problemIds.has(s.problem_id));
+
+    const byProblem = new Map<string, ReportedSub[]>();
+    for (const s of subs) {
+      (byProblem.get(s.problem_id) ?? byProblem.set(s.problem_id, []).get(s.problem_id)!).push(s);
+    }
+
+    const pres: Record<string, ProblemResult> = {};
+    let score = 0;
+    let lastAcRel = 0;
+    let totalPenalties = 0;
+    for (const pid of problemIds) {
+      const list = byProblem.get(pid) ?? [];
+      let penalties = 0;
+      let acTime: number | null = null;
+      for (const s of list) {
+        if (s.result === 'AC') { acTime = s.epoch_second - startUnix; break; }
+        penalties++;
+      }
+      const solved = acTime !== null;
+      pres[pid] = { solved, penalties, acTimeSeconds: acTime };
+      if (solved) {
+        score += pointsOf.get(pid) ?? 0;
+        lastAcRel = Math.max(lastAcRel, acTime as number);
+        totalPenalties += penalties;
+      }
+    }
+
+    rows.push({
+      rank: 0,
+      traqId: part.traq_id,
+      atcoderId: part.atcoder_id,
+      score,
+      penaltySeconds: score > 0 ? lastAcRel + PENALTY_PER_WRONG * totalPenalties : 0,
+      problems: pres,
+    });
+  }
+
+  // 得点降順、同点はペナルティ昇順
+  rows.sort((a, b) => (b.score - a.score) || (a.penaltySeconds - b.penaltySeconds));
+  let rank = 0;
+  let prev: { score: number; pen: number } | null = null;
+  rows.forEach((r, i) => {
+    if (!prev || r.score !== prev.score || r.penaltySeconds !== prev.pen) rank = i + 1;
+    r.rank = rank;
+    prev = { score: r.score, pen: r.penaltySeconds };
+  });
+
+  const data: Standings = { contest, problems, rows };
+  standingsCache.set(contestId, { at: Date.now(), data });
+  return data;
+};
 
 export default app;

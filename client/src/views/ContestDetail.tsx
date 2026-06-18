@@ -1,19 +1,46 @@
 import { useEffect, useState } from 'react';
 import { api, endIso, fmtDateTime, modeLabel, type ContestDetail as Detail } from '../api';
 import DifficultyCircle from '../components/DifficultyCircle';
+import Standings from './Standings';
 
 export default function ContestDetail({ id, meId }: { id: string; meId: string }) {
   const [data, setData] = useState<Detail | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [joining, setJoining] = useState(false);
   const [error, setError] = useState('');
+  const [standingsKey, setStandingsKey] = useState(0);
 
-  useEffect(() => {
-    api.getContest(id).then((d) => {
-      if (d) setData(d);
-      else setNotFound(true);
-    });
-  }, [id]);
+  const reload = async () => {
+    const d = await api.getContest(id);
+    if (d) setData(d);
+    else setNotFound(true);
+  };
+
+  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [id]);
+
+  const handleJoin = async () => {
+    setJoining(true);
+    setError('');
+    const res = await api.joinContest(id);
+    setJoining(false);
+    if ('ok' in res) {
+      await reload();
+      setStandingsKey((k) => k + 1);
+    } else if (res.error === 'atcoder id not registered') {
+      setError('参加するにはマイページでAtCoder IDを登録してください');
+    } else {
+      setError('参加に失敗しました');
+    }
+  };
+
+  const handleLeave = async () => {
+    setJoining(true);
+    await api.leaveContest(id);
+    setJoining(false);
+    await reload();
+    setStandingsKey((k) => k + 1);
+  };
 
   const handleDelete = async () => {
     if (!confirm('このコンテストを削除しますか？この操作は取り消せません。')) return;
@@ -40,6 +67,7 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
   if (!data) return <div className="card"><p className="msg">読み込み中...</p></div>;
 
   const isOwner = data.contest.created_by === meId;
+  const joined = data.participants.some((p) => p.traq_id === meId);
 
   return (
     <div className="card card-wide">
@@ -52,8 +80,23 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
         （{data.contest.duration_minutes ?? '?'}分）
       </p>
       <p className="hint">
-        作成: @{data.contest.created_by} ・ {modeLabel(data.contest.mode)}
+        作成: @{data.contest.created_by} ・ {modeLabel(data.contest.mode)} ・ 参加 {data.participants.length}人
       </p>
+
+      <div className="join-row">
+        {joined ? (
+          <>
+            <span className="joined-badge">✓ 参加中</span>
+            <button className="btn btn-ghost btn-inline" onClick={handleLeave} disabled={joining}>
+              参加取消
+            </button>
+          </>
+        ) : (
+          <button className="btn btn-primary btn-inline" onClick={handleJoin} disabled={joining}>
+            {joining ? '処理中...' : 'このコンテストに参加'}
+          </button>
+        )}
+      </div>
 
       <table className="problem-table">
         <thead>
@@ -87,6 +130,8 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
       </table>
 
       {error && <p className="msg error">{error}</p>}
+
+      <Standings key={standingsKey} contestId={id} />
 
       {isOwner && (
         <button className="btn btn-danger" onClick={handleDelete} disabled={deleting}>

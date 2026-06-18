@@ -520,6 +520,127 @@ textarea.text-input {
   white-space: nowrap;
 }
 
+/* ---- token section ---- */
+.token-section {
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.token-row {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.token-row .text-input {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* ---- join row ---- */
+.join-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.joined-badge {
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+/* ---- standings ---- */
+.standings-wrap {
+  margin-top: 28px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.standings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.standings-table th,
+.standings-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.standings-table th {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.st-user {
+  text-align: left !important;
+}
+
+.st-rank {
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.st-score {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.st-time {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.st-cell {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.st-ac {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.st-wa {
+  color: #ef4444;
+}
+
+.st-pen {
+  color: #ef4444;
+  font-size: 11px;
+  margin-left: 2px;
+}
+
 .diff-circle {
   display: inline-block;
   width: 14px;

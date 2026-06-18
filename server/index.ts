@@ -4,6 +4,7 @@ import './db';
 import authRoutes from './routes/auth';
 import usersRoutes from './routes/users';
 import contestsRoutes from './routes/contests';
+import submissionsRoutes from './routes/submissions';
 
 const app = new Hono();
 
@@ -12,9 +13,10 @@ app.use('*', cors({
   credentials: true,
 }));
 
-app.route('/api/auth',     authRoutes);
-app.route('/api/users',    usersRoutes);
-app.route('/api/contests', contestsRoutes);
+app.route('/api/auth',        authRoutes);
+app.route('/api/users',       usersRoutes);
+app.route('/api/contests',    contestsRoutes);
+app.route('/api/submissions', submissionsRoutes);
 
 app.get('/api/health', (c) => c.json({ status: 'ok' }));
 

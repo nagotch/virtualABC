@@ -58,9 +58,20 @@ db.run(`
     difficulty      INTEGER,              -- 推定難易度 (null可)
     color           TEXT,                 -- 色キー (null可)
     url             TEXT NOT NULL,
+    points          INTEGER NOT NULL DEFAULT 100, -- 配点（順位表用）
     PRIMARY KEY (contest_id, idx)
   )
 `);
+
+// points カラム追加（旧版から移行。既存行は (idx+1)*100 で埋める）
+const cpCols = db
+  .query<{ name: string }, []>("PRAGMA table_info(contest_problems)")
+  .all()
+  .map((r) => r.name);
+if (!cpCols.includes('points')) {
+  db.run("ALTER TABLE contest_problems ADD COLUMN points INTEGER NOT NULL DEFAULT 100");
+  db.run("UPDATE contest_problems SET points = (idx + 1) * 100");
+}
 
 db.run(`
   CREATE TABLE IF NOT EXISTS participants (
@@ -78,5 +89,18 @@ db.run(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
 `);
+
+// ユーザースクリプトが報告したAtCoder提出（リアルタイム順位表用）
+db.run(`
+  CREATE TABLE IF NOT EXISTS reported_submissions (
+    submission_id INTEGER PRIMARY KEY,   -- AtCoderの提出ID（冪等性のためPK）
+    atcoder_id    TEXT NOT NULL,
+    problem_id    TEXT NOT NULL,
+    result        TEXT NOT NULL,         -- AC, WA, ...
+    epoch_second  INTEGER NOT NULL,      -- 提出時刻(unix)
+    reported_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+db.run('CREATE INDEX IF NOT EXISTS idx_reported_atcoder ON reported_submissions (atcoder_id, epoch_second)');
 
 export default db;

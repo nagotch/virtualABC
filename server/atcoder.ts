@@ -207,6 +207,47 @@ const deriveIndex = (problemId: string): string => {
   return seg.toUpperCase();
 };
 
+// ---- 提出取得（順位表用） ----
+export type Submission = {
+  id: number;
+  epoch_second: number;
+  problem_id: string;
+  contest_id: string;
+  user_id: string;
+  result: string; // "AC", "WA", "TLE", ...
+};
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// 指定ユーザーの fromSecond 以降の提出を取得（500件ごとにページング）
+export const fetchUserSubmissions = async (
+  user: string,
+  fromSecond: number,
+): Promise<Submission[]> => {
+  const all: Submission[] = [];
+  let from = fromSecond;
+  for (let page = 0; page < 20; page++) {
+    const res = await fetch(
+      `https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions?user=${encodeURIComponent(user)}&from_second=${from}`,
+      {
+        headers: { 'User-Agent': UA, 'Accept-Encoding': 'gzip' },
+        signal: AbortSignal.timeout(15000), // ハング防止
+      },
+    );
+    if (!res.ok) {
+      if (res.status === 404) return all; // 存在しないユーザー
+      throw new Error(`submissions fetch failed: ${res.status}`);
+    }
+    const batch = await res.json() as Submission[];
+    if (batch.length === 0) break;
+    all.push(...batch);
+    if (batch.length < 500) break;
+    from = batch[batch.length - 1].epoch_second + 1;
+    await sleep(300); // レート制限への配慮
+  }
+  return all;
+};
+
 // 方式3: 手動。問題URLまたは "ABC331/D" 形式のリストから問題セットを作る。
 // 解釈できなかった行は結果に含めない（呼び出し側で件数チェック可能）。
 export const generateManual = async (specs: string[]): Promise<GeneratedProblem[]> => {

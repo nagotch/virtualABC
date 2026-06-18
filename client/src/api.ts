@@ -24,6 +24,30 @@ export type Problem = {
   difficulty: number | null;
   color: ColorKey | null;
   url: string;
+  points: number;
+};
+
+export type Participant = { traq_id: string; atcoder_id: string };
+
+export type ProblemResult = {
+  solved: boolean;
+  penalties: number;
+  acTimeSeconds: number | null;
+};
+
+export type StandingRow = {
+  rank: number;
+  traqId: string;
+  atcoderId: string;
+  score: number;
+  penaltySeconds: number;
+  problems: Record<string, ProblemResult>;
+};
+
+export type Standings = {
+  contest: { id: string; title: string; start_at: string | null; duration_minutes: number | null };
+  problems: { problem_id: string; problem_index: string; points: number }[];
+  rows: StandingRow[];
 };
 
 export type ContestMode = 'random' | 'color' | 'manual';
@@ -45,6 +69,7 @@ export type ContestSummary = {
 export type ContestDetail = {
   contest: Omit<ContestSummary, 'problem_count'>;
   problems: Problem[];
+  participants: Participant[];
 };
 
 // 色の定義（表示用）
@@ -79,6 +104,15 @@ export const fmtDateTime = (iso: string | null): string => {
 export const endIso = (startIso: string | null, minutes: number | null): string | null => {
   if (!startIso || !minutes) return null;
   return new Date(new Date(startIso).getTime() + minutes * 60_000).toISOString();
+};
+
+// 秒数を H:MM:SS / M:SS 表記に
+export const fmtDuration = (sec: number): string => {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 };
 
 export type ContestStatus = 'ongoing' | 'upcoming' | 'finished';
@@ -150,6 +184,23 @@ export const api = {
       credentials: 'include',
     });
     return res.json() as Promise<{ ok: true } | { error: string }>;
+  },
+  async joinContest(id: string): Promise<{ ok: true } | { error: string }> {
+    const res = await fetch(`${API}/api/contests/${id}/join`, {
+      method: 'POST', credentials: 'include',
+    });
+    return res.json() as Promise<{ ok: true } | { error: string }>;
+  },
+  async leaveContest(id: string): Promise<{ ok: true } | { error: string }> {
+    const res = await fetch(`${API}/api/contests/${id}/leave`, {
+      method: 'POST', credentials: 'include',
+    });
+    return res.json() as Promise<{ ok: true } | { error: string }>;
+  },
+  async standings(id: string): Promise<Standings | null> {
+    const res = await fetch(`${API}/api/contests/${id}/standings`, { credentials: 'include' });
+    if (!res.ok) return null;
+    return res.json() as Promise<Standings>;
   },
   logout(): Promise<Response> {
     return fetch(`${API}/api/auth/logout`, { method: 'POST', credentials: 'include' });
