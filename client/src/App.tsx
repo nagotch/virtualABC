@@ -59,12 +59,12 @@ function App() {
   const renderRoute = () => {
     if (!user) return null;
     const path = route.replace(/^#/, '');
-    if (path === '/' || path === '') return <MyPage user={user} onUserChange={setUser} />;
+    if (path === '/' || path === '') return <MyPage user={user} onUserChange={setUser} onLogout={handleLogout} />;
     if (path === '/contests') return <ContestList />;
     if (path === '/contests/new') return <CreateContest />;
     const m = path.match(/^\/contests\/(.+)$/);
     if (m) return <ContestDetail id={m[1]} meId={user.traqId} />;
-    return <MyPage user={user} onUserChange={setUser} />;
+    return <MyPage user={user} onUserChange={setUser} onLogout={handleLogout} />;
   };
 
   const navLink = (href: string, label: string) => {
@@ -90,7 +90,6 @@ function App() {
 
         {user && (
           <nav className="nav">
-            {navLink('#/', 'マイページ')}
             {navLink('#/contests', 'コンテスト')}
           </nav>
         )}
@@ -105,9 +104,18 @@ function App() {
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
           {user && (
-            <button className="btn btn-ghost btn-inline" onClick={handleLogout}>
-              ログアウト
-            </button>
+            <a
+              href="#/"
+              className={`nav-avatar${(route.replace(/^#/, '') || '/') === '/' ? ' active' : ''}`}
+              title={`マイページ (@${user.traqId})`}
+            >
+              <img
+                src={`https://q.trap.jp/api/v3/public/icon/${encodeURIComponent(user.traqId)}`}
+                alt={`@${user.traqId}`}
+                width={36}
+                height={36}
+              />
+            </a>
           )}
         </div>
       </header>

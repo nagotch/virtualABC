@@ -54,7 +54,7 @@ export default function CreateContest() {
   };
 
   return (
-    <div className="card card-wide">
+    <div className="card">
       <h1>コンテストを作成</h1>
 
       <form onSubmit={handleSubmit}>

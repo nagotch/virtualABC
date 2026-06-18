@@ -57,6 +57,28 @@
   gap: 10px;
 }
 
+.nav-avatar {
+  display: inline-flex;
+  border-radius: 50%;
+  line-height: 0;
+  border: 2px solid transparent;
+  transition: border-color 0.15s ease;
+}
+
+.nav-avatar img {
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg);
+}
+
+.nav-avatar:hover {
+  border-color: var(--accent);
+}
+
+.nav-avatar.active {
+  border-color: var(--accent);
+}
+
 .brand .logo {
   width: 32px;
   height: 32px;
@@ -92,12 +114,12 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 48px 20px;
+  padding: 32px 24px;
 }
 
 .card {
   width: 100%;
-  max-width: 420px;
+  max-width: 560px;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -313,7 +335,7 @@ textarea.text-input {
 
 /* ---- wider cards & headings ---- */
 .card-wide {
-  max-width: 640px;
+  max-width: 980px;
 }
 
 .card-head {

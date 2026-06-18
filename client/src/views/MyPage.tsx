@@ -18,9 +18,11 @@ const TRAQ_ICON = (name: string) =>
 export default function MyPage({
   user,
   onUserChange,
+  onLogout,
 }: {
   user: User;
   onUserChange: (u: User) => void;
+  onLogout: () => void;
 }) {
   const [atcoderId, setAtcoderId] = useState('');
   const [message, setMessage] = useState('');
@@ -128,6 +130,8 @@ export default function MyPage({
           </p>
         </div>
       )}
+
+      <button onClick={onLogout} className="btn btn-ghost">ログアウト</button>
     </div>
   );
 }
