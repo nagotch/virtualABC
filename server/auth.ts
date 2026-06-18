@@ -32,19 +32,27 @@ export const exchangeCodeForToken = async (
   codeVerifier: string,
   redirectUri: string,
   clientId: string,
+  clientSecret: string,
 ): Promise<string> => {
+  const params: Record<string, string> = {
+    grant_type:    'authorization_code',
+    client_id:     clientId,
+    redirect_uri:  redirectUri,
+    code,
+    code_verifier: codeVerifier,
+  };
+  if (clientSecret) params.client_secret = clientSecret;
+
   const res = await fetch(TRAQ_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type:    'authorization_code',
-      client_id:     clientId,
-      redirect_uri:  redirectUri,
-      code,
-      code_verifier: codeVerifier,
-    }),
+    body: new URLSearchParams(params),
   });
-  if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Token exchange failed: ${res.status} ${body}`);
+  }
   const { access_token } = await res.json() as { access_token: string };
   return access_token;
 };
