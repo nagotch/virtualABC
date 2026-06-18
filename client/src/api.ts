@@ -202,12 +202,6 @@ export const api = {
     if (!res.ok) return null;
     return res.json() as Promise<Standings>;
   },
-  async getToken(): Promise<string | null> {
-    const res = await fetch(`${API}/api/auth/token`, { credentials: 'include' });
-    if (!res.ok) return null;
-    const { token } = await res.json() as { token: string };
-    return token;
-  },
   logout(): Promise<Response> {
     return fetch(`${API}/api/auth/logout`, { method: 'POST', credentials: 'include' });
   },

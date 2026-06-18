@@ -90,15 +90,6 @@ db.run(`
   )
 `);
 
-// ユーザースクリプトからの提出報告に使うトークン（ユーザーごと）
-const userCols = db
-  .query<{ name: string }, []>("PRAGMA table_info(users)")
-  .all()
-  .map((r) => r.name);
-if (!userCols.includes('api_token')) {
-  db.run("ALTER TABLE users ADD COLUMN api_token TEXT");
-}
-
 // ユーザースクリプトが報告したAtCoder提出（リアルタイム順位表用）
 db.run(`
   CREATE TABLE IF NOT EXISTS reported_submissions (

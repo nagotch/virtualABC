@@ -26,26 +26,14 @@ export default function MyPage({
   const [message, setMessage] = useState('');
   const [rating, setRating] = useState<RatingInfo | null>(null);
   const [editing, setEditing] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const loadRating = async () => {
     setRating(await api.rating());
   };
 
   useEffect(() => {
-    if (user.atcoderId) {
-      loadRating();
-      api.getToken().then(setToken);
-    }
+    if (user.atcoderId) loadRating();
   }, [user.atcoderId]);
-
-  const copyToken = () => {
-    if (!token) return;
-    navigator.clipboard.writeText(token);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,19 +121,10 @@ export default function MyPage({
 
       {registered && (
         <div className="token-section">
-          <h2 className="section-title">🔑 提出報告トークン</h2>
+          <h2 className="section-title">📝 リアルタイム順位表の使い方</h2>
           <p className="hint">
-            リアルタイム順位表には、ユーザースクリプト(Tampermonkey)で提出結果を報告します。
-            下のトークンをスクリプトの <code>VABC_TOKEN</code> に貼り付けてください。
-          </p>
-          <div className="token-row">
-            <input className="text-input" readOnly value={token ?? '読み込み中...'} />
-            <button className="btn btn-ghost btn-inline" onClick={copyToken} disabled={!token}>
-              {copied ? 'コピー済' : 'コピー'}
-            </button>
-          </div>
-          <p className="hint">
-            ※ このトークンは他人に教えないでください（提出のなりすまし防止）。
+            ユーザースクリプト(Tampermonkey)を入れると、AtCoderでの提出結果が自動で順位表に反映されます。
+            スクリプトはログイン中のAtCoder IDを自動取得するので、設定は不要です。
           </p>
         </div>
       )}

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         virtualABC Submission Reporter
 // @namespace    http://tampermonkey.net/
-// @version      1.1
-// @description  AtCoderの提出結果を virtualABC サーバーに報告し、リアルタイム順位表を実現します。
+// @version      2.0
+// @description  AtCoderの提出結果を virtualABC サーバーに報告し、リアルタイム順位表を実現します。ログイン中のAtCoder IDを自動取得するので設定不要です。
 // @author       traP
 // @match        https://atcoder.jp/contests/*
 // @run-at       document-end
@@ -16,8 +16,6 @@
   // ===== 設定 =====================================================
   // virtualABC サーバーのURL（デプロイ先に合わせて変更）
   const VABC_API = 'http://localhost:3000';
-  // マイページで取得した自分のトークンを貼り付ける
-  const VABC_TOKEN = 'PASTE_YOUR_TOKEN_HERE';
   // ================================================================
 
   const FINAL = ['AC', 'WA', 'RE', 'TLE', 'MLE', 'CE', 'OLE', 'IE', 'WR'];
@@ -55,6 +53,7 @@
       localStorage.removeItem('vabc_submitted');
 
       // --- 提出情報を抽出 ---
+      const atcoderId = getLoginHandle();
       const problemId = localStorage.getItem('vabc_problem_id');
 
       const link = row.querySelector('a[href*="/submissions/"]') || row.querySelector('td:last-child a');
@@ -65,12 +64,25 @@
       // 提出時刻（AtCoderのtime要素。JST想定で解釈、失敗時は現在時刻）
       const epochSecond = parseEpochSecond(row);
 
-      if (problemId && submissionId && VABC_TOKEN && VABC_TOKEN !== 'PASTE_YOUR_TOKEN_HERE') {
-        reportToVABC({ submissionId, problemId, result, epochSecond });
+      if (atcoderId && problemId && submissionId) {
+        reportToVABC({ atcoderId, submissionId, problemId, result, epochSecond });
       } else {
-        console.warn('[vABC] トークン未設定 or 情報不足のため報告スキップ');
+        console.warn('[vABC] 情報不足のため報告スキップ', { atcoderId, problemId, submissionId });
       }
     }, 1000);
+  }
+
+  // ログイン中のAtCoderハンドルをページから取得
+  function getLoginHandle() {
+    // ナビバー右側のユーザーメニュー内、プロフィールへのリンク /users/{handle}
+    const a = document.querySelector('.navbar-right a[href^="/users/"]')
+           || document.querySelector('.dropdown-menu a[href^="/users/"]')
+           || document.querySelector('a.username[href^="/users/"]');
+    if (a) {
+      const m = a.getAttribute('href').match(/\/users\/([^/?#]+)/);
+      if (m) return decodeURIComponent(m[1]);
+    }
+    return null;
   }
 
   // 提出行から提出時刻(unix秒)を推定
@@ -91,7 +103,7 @@
     GM_xmlhttpRequest({
       method: 'POST',
       url: `${VABC_API}/api/submissions`,
-      headers: { 'Content-Type': 'application/json', 'X-VABC-Token': VABC_TOKEN },
+      headers: { 'Content-Type': 'application/json' },
       data: JSON.stringify(payload),
       onload: (res) => console.log('[vABC] 報告完了', res.status, res.responseText),
       onerror: () => console.error('[vABC] 報告失敗（VABC_API / @connect を確認）'),
