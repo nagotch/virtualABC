@@ -63,7 +63,7 @@ function App() {
     if (path === '/contests') return <ContestList />;
     if (path === '/contests/new') return <CreateContest />;
     const m = path.match(/^\/contests\/(.+)$/);
-    if (m) return <ContestDetail id={m[1]} />;
+    if (m) return <ContestDetail id={m[1]} meId={user.traqId} />;
     return <MyPage user={user} onUserChange={setUser} />;
   };
 

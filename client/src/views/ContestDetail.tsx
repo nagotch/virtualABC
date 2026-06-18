@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
-import { api, colorHex, colorLabel, type ContestDetail as Detail } from '../api';
+import { api, type ContestDetail as Detail } from '../api';
+import DifficultyCircle from '../components/DifficultyCircle';
 
-export default function ContestDetail({ id }: { id: string }) {
+export default function ContestDetail({ id, meId }: { id: string; meId: string }) {
   const [data, setData] = useState<Detail | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     api.getContest(id).then((d) => {
@@ -11,6 +14,19 @@ export default function ContestDetail({ id }: { id: string }) {
       else setNotFound(true);
     });
   }, [id]);
+
+  const handleDelete = async () => {
+    if (!confirm('このコンテストを削除しますか？この操作は取り消せません。')) return;
+    setDeleting(true);
+    setError('');
+    const res = await api.deleteContest(id);
+    if ('ok' in res) {
+      window.location.hash = '#/contests';
+    } else {
+      setError(res.error === 'forbidden' ? '作成者のみ削除できます' : '削除に失敗しました');
+      setDeleting(false);
+    }
+  };
 
   if (notFound) {
     return (
@@ -22,6 +38,8 @@ export default function ContestDetail({ id }: { id: string }) {
   }
 
   if (!data) return <div className="card"><p className="msg">読み込み中...</p></div>;
+
+  const isOwner = data.contest.created_by === meId;
 
   return (
     <div className="card card-wide">
@@ -52,19 +70,25 @@ export default function ContestDetail({ id }: { id: string }) {
                 <span className="pt-src">{p.atcoder_contest} {p.problem_index}</span>
               </td>
               <td>
-                {p.difficulty === null ? (
-                  <span className="badge unset">不明</span>
-                ) : (
-                  <span className="diff-badge" style={{ color: colorHex(p.color) }}>
-                    <span className="color-dot" style={{ background: colorHex(p.color) }} />
-                    {p.difficulty}（{colorLabel(p.color)}）
+                <span className="diff-cell">
+                  <DifficultyCircle difficulty={p.difficulty} />
+                  <span className={`diff-value${p.difficulty === null ? ' unknown' : ''}`}>
+                    {p.difficulty === null ? '不明' : p.difficulty}
                   </span>
-                )}
+                </span>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {error && <p className="msg error">{error}</p>}
+
+      {isOwner && (
+        <button className="btn btn-danger" onClick={handleDelete} disabled={deleting}>
+          {deleting ? '削除中...' : 'このコンテストを削除'}
+        </button>
+      )}
     </div>
   );
 }

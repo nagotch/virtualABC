@@ -102,6 +102,13 @@ export const api = {
     });
     return res.json() as Promise<{ id: string } | { error: string }>;
   },
+  async deleteContest(id: string): Promise<{ ok: true } | { error: string }> {
+    const res = await fetch(`${API}/api/contests/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    return res.json() as Promise<{ ok: true } | { error: string }>;
+  },
   logout(): Promise<Response> {
     return fetch(`${API}/api/auth/logout`, { method: 'POST', credentials: 'include' });
   },

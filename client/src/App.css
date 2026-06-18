@@ -225,6 +225,23 @@ input[type='text'],
   color: var(--accent);
 }
 
+.btn-danger {
+  background: transparent;
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+  margin-top: 20px;
+}
+
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .msg {
   margin-top: 14px;
   font-size: 14px;
@@ -433,4 +450,37 @@ input[type='text'],
   gap: 6px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.diff-circle {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.diff-circle--unknown {
+  border-style: dotted;
+  background: transparent;
+}
+
+.diff-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.diff-value {
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.diff-value.unknown {
+  color: var(--text-muted);
+  font-weight: 500;
 }

@@ -135,4 +135,26 @@ app.get('/:id', (c) => {
   return c.json({ contest, problems });
 });
 
+// DELETE /api/contests/:id → 作成者のみ削除可能
+app.delete('/:id', (c) => {
+  const traqId = getTraqId(getCookie(c, 'session'));
+  if (!traqId) return c.json({ error: 'unauthorized' }, 401);
+
+  const id = c.req.param('id');
+  const row = db.query<{ created_by: string }, [string]>(
+    'SELECT created_by FROM contests WHERE id = ?',
+  ).get(id);
+  if (!row) return c.json({ error: 'not found' }, 404);
+  if (row.created_by !== traqId) return c.json({ error: 'forbidden' }, 403);
+
+  const tx = db.transaction(() => {
+    db.run('DELETE FROM contest_problems WHERE contest_id = ?', [id]);
+    db.run('DELETE FROM participants WHERE contest_id = ?', [id]);
+    db.run('DELETE FROM contests WHERE id = ?', [id]);
+  });
+  tx();
+
+  return c.json({ ok: true });
+});
+
 export default app;
