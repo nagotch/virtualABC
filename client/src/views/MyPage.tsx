@@ -54,11 +54,11 @@ export default function MyPage({
 
   const renderRating = () => {
     if (!rating) return <span className="badge unset">確認中...</span>;
-    if (!rating.exists) return <span className="badge unset">ユーザーが見つかりません</span>;
-    if (rating.rating === null) return <span className="badge unset">レート無し（未参加）</span>;
+    if (rating.rating === null) return <span className="badge unset">未参加（レート無し）</span>;
     return (
       <span className="value" style={{ color: ratingColor(rating.rating) }}>
         {rating.rating}
+        <span className="rating-sub"> （{rating.contests}回）</span>
       </span>
     );
   };
@@ -91,7 +91,7 @@ export default function MyPage({
 
       {registered && (
         <div className="field">
-          <span className="label">現在のレート</span>
+          <span className="label">レート（独自）</span>
           {renderRating()}
         </div>
       )}

@@ -460,4 +460,31 @@ const computeStandings = (contestId: string): Standings | null => {
   return data;
 };
 
+// 指定ユーザーが参加して「終了済み」コンテストの perf 履歴を返す（最新が先頭）。
+// 0完(perfがnull)のコンテストは perf=0 として扱う。レーティング算出に使う。
+export const getUserPerfHistory = (traqId: string): number[] => {
+  const now = Date.now();
+  const contests = db.query<
+    { id: string; start_at: string | null; duration_minutes: number | null },
+    [string]
+  >(`
+    SELECT c.id, c.start_at, c.duration_minutes
+    FROM contests c JOIN participants p ON p.contest_id = c.id
+    WHERE p.traq_id = ?
+    ORDER BY c.start_at DESC
+  `).all(traqId);
+
+  const perfs: number[] = [];
+  for (const c of contests) {
+    if (!c.start_at) continue;
+    const end = new Date(c.start_at).getTime() + (c.duration_minutes ?? 0) * 60_000;
+    if (now < end) continue; // 終了していないコンテストはレートに含めない
+    const st = computeStandings(c.id);
+    const row = st?.rows.find((r) => r.traqId === traqId);
+    if (!row) continue;
+    perfs.push(row.perf ?? 0);
+  }
+  return perfs;
+};
+
 export default app;

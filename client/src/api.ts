@@ -6,9 +6,8 @@ export type User = {
 };
 
 export type RatingInfo = {
-  atcoderId: string;
-  exists: boolean;
-  rating: number | null;
+  rating: number | null; // virtualABC 独自レート
+  contests: number;      // レート算出に使った（終了済み参加）コンテスト数
 };
 
 export type ColorKey =
