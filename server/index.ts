@@ -1,10 +1,18 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import './db'; // initialize DB on startup
+import './db';
+import authRoutes from './routes/auth';
+import usersRoutes from './routes/users';
 
 const app = new Hono();
 
-app.use('*', cors({ origin: 'http://localhost:5173' }));
+app.use('*', cors({
+  origin: 'http://localhost:5173',
+  credentials: true,
+}));
+
+app.route('/api/auth',  authRoutes);
+app.route('/api/users', usersRoutes);
 
 app.get('/api/health', (c) => c.json({ status: 'ok' }));
 

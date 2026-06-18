@@ -1,24 +1,84 @@
 import { useEffect, useState } from 'react';
 
-function App() {
-  const [serverStatus, setServerStatus] = useState<'checking' | 'ok' | 'error'>('checking');
+type User = {
+  traqId: string;
+  atcoderId: string | null;
+};
 
-  useEffect(() => {
-    fetch('http://localhost:3000/api/health')
-      .then((r) => (r.ok ? setServerStatus('ok') : setServerStatus('error')))
-      .catch(() => setServerStatus('error'));
-  }, []);
+const API = 'http://localhost:3000';
+
+function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [atcoderId, setAtcoderId] = useState('');
+  const [message, setMessage] = useState('');
+
+  const fetchMe = async () => {
+    const res = await fetch(`${API}/api/auth/me`, { credentials: 'include' });
+    const { user } = await res.json() as { user: User | null };
+    setUser(user);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchMe(); }, []);
+
+  const handleLogin = () => {
+    window.location.href = `${API}/api/auth/login`;
+  };
+
+  const handleLogout = async () => {
+    await fetch(`${API}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+    setUser(null);
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = await fetch(`${API}/api/users/register`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ atcoderId }),
+    });
+    if (res.ok) {
+      setMessage('登録しました！');
+      fetchMe();
+    } else {
+      setMessage('登録に失敗しました');
+    }
+  };
+
+  if (loading) return <p>読み込み中...</p>;
 
   return (
-    <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
+    <div style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '480px' }}>
       <h1>Virtual ABC</h1>
-      <p>traP内部バーチャルABCアプリ</p>
-      <p>
-        サーバー:{' '}
-        {serverStatus === 'checking' && '確認中...'}
-        {serverStatus === 'ok' && '✅ 接続OK'}
-        {serverStatus === 'error' && '❌ 接続失敗（サーバーが起動しているか確認してください）'}
-      </p>
+
+      {!user ? (
+        <button onClick={handleLogin}>traQでログイン</button>
+      ) : (
+        <>
+          <p>ログイン中: <strong>@{user.traqId}</strong></p>
+          <p>AtCoder ID: <strong>{user.atcoderId ?? '未登録'}</strong></p>
+
+          <form onSubmit={handleRegister} style={{ marginTop: '1rem' }}>
+            <label>
+              AtCoder IDを登録
+              <br />
+              <input
+                value={atcoderId}
+                onChange={(e) => setAtcoderId(e.target.value)}
+                placeholder="例: chokudai"
+                style={{ marginTop: '0.5rem', padding: '0.4rem', width: '100%' }}
+              />
+            </label>
+            <button type="submit" style={{ marginTop: '0.5rem' }}>登録</button>
+          </form>
+
+          {message && <p>{message}</p>}
+
+          <button onClick={handleLogout} style={{ marginTop: '1rem' }}>ログアウト</button>
+        </>
+      )}
     </div>
   );
 }
