@@ -5,6 +5,7 @@ import MyPage from './views/MyPage';
 import ContestList from './views/ContestList';
 import CreateContest from './views/CreateContest';
 import ContestDetail from './views/ContestDetail';
+import RecurringContests from './views/RecurringContests';
 
 type Theme = 'light' | 'dark';
 
@@ -61,7 +62,8 @@ function App() {
     const path = route.replace(/^#/, '');
     if (path === '/' || path === '') return <MyPage user={user} onUserChange={setUser} onLogout={handleLogout} />;
     if (path === '/contests') return <ContestList />;
-    if (path === '/contests/new') return <CreateContest />;
+    if (path === '/contests/new') return <CreateContest user={user} />;
+    if (path === '/recurring') return <RecurringContests user={user} />;
     const m = path.match(/^\/contests\/(.+)$/);
     if (m) return <ContestDetail id={m[1]} meId={user.traqId} />;
     return <MyPage user={user} onUserChange={setUser} onLogout={handleLogout} />;
@@ -91,6 +93,7 @@ function App() {
         {user && (
           <nav className="nav">
             {navLink('#/contests', 'コンテスト')}
+            {navLink('#/recurring', '定期開催')}
           </nav>
         )}
 

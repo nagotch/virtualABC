@@ -9,7 +9,8 @@ import {
   type ColorKey,
   type GeneratedProblem,
 } from '../atcoder';
-import { notifyContestCreated } from '../notify';
+import { createContest } from '../contests-core';
+import { isAdmin } from '../admin';
 
 const app = new Hono();
 
@@ -21,13 +22,22 @@ const getTraqId = (sessionId: string | undefined): string | null => {
   return row?.traq_id ?? null;
 };
 
-const randomId = (): string => {
-  const buf = new Uint8Array(8);
-  crypto.getRandomValues(buf);
-  return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('');
-};
-
 const VALID_COLORS = new Set(COLORS.map((c) => c.key));
+
+// 開催状態の判定
+const timingOf = (
+  startAt: string | null,
+  durationMinutes: number | null,
+  now: number = Date.now(),
+): { ongoing: boolean; upcoming: boolean; finished: boolean } => {
+  const startMs = startAt ? new Date(startAt).getTime() : null;
+  const endMs = startMs !== null ? startMs + (durationMinutes ?? 0) * 60_000 : null;
+  return {
+    upcoming: startMs !== null && now < startMs,
+    ongoing: startMs !== null && endMs !== null && now >= startMs && now < endMs,
+    finished: startMs === null || (endMs !== null && now >= endMs),
+  };
+};
 
 type CreateBody = {
   title?: string;
@@ -37,6 +47,7 @@ type CreateBody = {
   urls?: string[];                             // manual用（問題URLのリスト）
   startAt?: string;                            // ISO8601 開始日時
   durationMinutes?: number;                    // 実施時間（分）
+  rated?: boolean;                             // レート変動（adminのみ有効）
 };
 
 // POST /api/contests → コンテスト作成（問題セット生成）
@@ -98,49 +109,32 @@ app.post('/', async (c) => {
     return c.json({ error: 'no problems matched' }, 400);
   }
 
-  const id = randomId();
   const title = (body.title?.trim() || `nagotch_virtual ${new Date().toLocaleDateString('ja-JP')}`).slice(0, 100);
 
-  const insertContest = db.prepare(
-    'INSERT INTO contests (id, title, mode, created_by, start_at, duration_minutes) VALUES (?, ?, ?, ?, ?, ?)',
-  );
-  const insertProblem = db.prepare(
-    `INSERT INTO contest_problems
-       (contest_id, idx, problem_id, atcoder_contest, problem_index, title, difficulty, color, url, points)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  );
+  // レート変動はadminのみ。非adminの指定は無視してfalse扱い。
+  const rated = body.rated === true && isAdmin(traqId);
 
-  const tx = db.transaction(() => {
-    insertContest.run(id, title, body.mode, traqId, startAtIso, duration);
-    problems.forEach((p, i) => {
-      insertProblem.run(
-        id, i, p.id, p.contest_id, p.problem_index, p.title, p.difficulty, p.color, p.url,
-        (i + 1) * 100, // 配点: A=100, B=200, ...
-      );
-    });
-  });
-  tx();
-
-  // traQへ通知（ベストエフォート）
-  void notifyContestCreated({
-    id, title,
-    startAt: startAtIso,
+  const id = createContest({
+    title,
+    mode: body.mode,
+    problems,
+    startAtIso,
     durationMinutes: duration,
-    problemCount: problems.length,
     createdBy: traqId,
+    rated,
   });
 
-  return c.json({ id, title, mode: body.mode, startAt: startAtIso, durationMinutes: duration, problems });
+  return c.json({ id, title, mode: body.mode, startAt: startAtIso, durationMinutes: duration, rated, problems });
 });
 
 // GET /api/contests → 一覧（新しい順）
 app.get('/', (c) => {
   const rows = db.query<
-    { id: string; title: string; mode: string; created_by: string; created_at: string; start_at: string | null; duration_minutes: number | null; problem_count: number },
+    { id: string; title: string; mode: string; created_by: string; created_at: string; start_at: string | null; duration_minutes: number | null; rated: number; problem_count: number },
     []
   >(`
     SELECT c.id, c.title, c.mode, c.created_by, c.created_at,
-           c.start_at, c.duration_minutes,
+           c.start_at, c.duration_minutes, c.rated,
            COUNT(p.idx) AS problem_count
     FROM contests c
     LEFT JOIN contest_problems p ON p.contest_id = c.id
@@ -176,13 +170,13 @@ app.get('/active-problems', (c) => {
 app.get('/:id', (c) => {
   const id = c.req.param('id');
   const contest = db.query<
-    { id: string; title: string; mode: string; created_by: string; created_at: string; start_at: string | null; duration_minutes: number | null },
+    { id: string; title: string; mode: string; created_by: string; created_at: string; start_at: string | null; duration_minutes: number | null; rated: number },
     [string]
-  >('SELECT id, title, mode, created_by, created_at, start_at, duration_minutes FROM contests WHERE id = ?').get(id);
+  >('SELECT id, title, mode, created_by, created_at, start_at, duration_minutes, rated FROM contests WHERE id = ?').get(id);
   if (!contest) return c.json({ error: 'not found' }, 404);
 
-  const participants = db.query<{ traq_id: string; atcoder_id: string }, [string]>(
-    'SELECT traq_id, atcoder_id FROM participants WHERE contest_id = ?',
+  const participants = db.query<{ traq_id: string; atcoder_id: string; rated: number }, [string]>(
+    'SELECT traq_id, atcoder_id, rated FROM participants WHERE contest_id = ?',
   ).all(id);
 
   // 問題一覧は「参加済み かつ 開催時間中」のときだけ返す（APIからの先読み防止）
@@ -208,13 +202,15 @@ app.get('/:id', (c) => {
 });
 
 // POST /api/contests/:id/join → 参加（AtCoder ID登録済みが必要）
-app.post('/:id/join', (c) => {
+// body: { rated?: boolean } … Rated参加 / Unrated(オープン)参加 を選べる（本家と同様）。
+// レート対象になるのは「Ratedコンテスト かつ Rated参加」のときのみ。
+app.post('/:id/join', async (c) => {
   const traqId = getTraqId(getCookie(c, 'session'));
   if (!traqId) return c.json({ error: 'unauthorized' }, 401);
 
   const id = c.req.param('id');
-  const contest = db.query<{ id: string }, [string]>(
-    'SELECT id FROM contests WHERE id = ?',
+  const contest = db.query<{ id: string; start_at: string | null; duration_minutes: number | null; rated: number }, [string]>(
+    'SELECT id, start_at, duration_minutes, rated FROM contests WHERE id = ?',
   ).get(id);
   if (!contest) return c.json({ error: 'not found' }, 404);
 
@@ -223,20 +219,43 @@ app.post('/:id/join', (c) => {
   ).get(traqId);
   if (!user?.atcoder_id) return c.json({ error: 'atcoder id not registered' }, 400);
 
+  let body: { rated?: boolean } = {};
+  try { body = await c.req.json<{ rated?: boolean }>(); } catch { /* 本文なしは既定値で扱う */ }
+
+  const { ongoing } = timingOf(contest.start_at, contest.duration_minutes);
+  const existing = db.query<{ rated: number }, [string, string]>(
+    'SELECT rated FROM participants WHERE contest_id = ? AND traq_id = ?',
+  ).get(id, traqId);
+  // コンテスト中は参加内容（Rated/Unrated）の変更を認めない
+  if (existing && ongoing) {
+    return c.json({ error: 'コンテスト中は参加内容を変更できません' }, 409);
+  }
+
+  // Rated参加できるのはRatedコンテストのときのみ。オープン参加(false)は常にUnrated。
+  const rated = contest.rated === 1 && body.rated !== false ? 1 : 0;
+
   db.run(
-    'INSERT OR REPLACE INTO participants (contest_id, traq_id, atcoder_id) VALUES (?, ?, ?)',
-    [id, traqId, user.atcoder_id],
+    'INSERT OR REPLACE INTO participants (contest_id, traq_id, atcoder_id, rated) VALUES (?, ?, ?, ?)',
+    [id, traqId, user.atcoder_id, rated],
   );
   standingsCache.delete(id);
-  return c.json({ ok: true });
+  return c.json({ ok: true, rated: rated === 1 });
 });
 
-// POST /api/contests/:id/leave → 参加取り消し
+// POST /api/contests/:id/leave → 参加取り消し（コンテスト中は不可）
 app.post('/:id/leave', (c) => {
   const traqId = getTraqId(getCookie(c, 'session'));
   if (!traqId) return c.json({ error: 'unauthorized' }, 401);
 
   const id = c.req.param('id');
+  const contest = db.query<{ start_at: string | null; duration_minutes: number | null }, [string]>(
+    'SELECT start_at, duration_minutes FROM contests WHERE id = ?',
+  ).get(id);
+  if (!contest) return c.json({ error: 'not found' }, 404);
+
+  const { ongoing } = timingOf(contest.start_at, contest.duration_minutes);
+  if (ongoing) return c.json({ error: 'コンテスト中は参加を取り消せません' }, 409);
+
   db.run('DELETE FROM participants WHERE contest_id = ? AND traq_id = ?', [id, traqId]);
   standingsCache.delete(id);
   return c.json({ ok: true });
@@ -323,6 +342,7 @@ type StandingRow = {
   rank: number;
   traqId: string;
   atcoderId: string;
+  rated: boolean;           // Rated参加か（Unrated/オープン参加はfalse）
   perf: number | null;      // 推定パフォーマンス
   score: number;
   penaltySeconds: number;
@@ -366,8 +386,8 @@ const computeStandings = (contestId: string): Standings | null => {
     'SELECT problem_id, problem_index, points, difficulty FROM contest_problems WHERE contest_id = ? ORDER BY idx',
   ).all(contestId);
 
-  const participants = db.query<{ traq_id: string; atcoder_id: string }, [string]>(
-    'SELECT traq_id, atcoder_id FROM participants WHERE contest_id = ?',
+  const participants = db.query<{ traq_id: string; atcoder_id: string; rated: number }, [string]>(
+    'SELECT traq_id, atcoder_id, rated FROM participants WHERE contest_id = ?',
   ).all(contestId);
 
   const startUnix = contest.start_at ? Math.floor(new Date(contest.start_at).getTime() / 1000) : 0;
@@ -438,6 +458,7 @@ const computeStandings = (contestId: string): Standings | null => {
       rank: 0,
       traqId: part.traq_id,
       atcoderId: part.atcoder_id,
+      rated: part.rated === 1,
       score,
       penaltySeconds,
       perf,
@@ -470,7 +491,7 @@ export const getUserPerfHistory = (traqId: string): number[] => {
   >(`
     SELECT c.id, c.start_at, c.duration_minutes
     FROM contests c JOIN participants p ON p.contest_id = c.id
-    WHERE p.traq_id = ?
+    WHERE p.traq_id = ? AND c.rated = 1 AND p.rated = 1
     ORDER BY c.start_at DESC
   `).all(traqId);
 

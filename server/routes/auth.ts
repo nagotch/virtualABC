@@ -9,6 +9,7 @@ import {
   generateState,
   getTraqMe,
 } from '../auth';
+import { isAdmin } from '../admin';
 
 const CLIENT_ID     = process.env.TRAQ_CLIENT_ID ?? '';
 const CLIENT_SECRET = process.env.TRAQ_CLIENT_SECRET ?? '';
@@ -105,6 +106,7 @@ app.get('/me', (c) => {
     user: {
       traqId:    row.traq_id,
       atcoderId: userRow?.atcoder_id ?? null,
+      isAdmin:   isAdmin(row.traq_id),
     },
   });
 });

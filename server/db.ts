@@ -46,6 +46,35 @@ if (!curCols.includes('start_at')) {
 if (!curCols.includes('duration_minutes')) {
   db.run("ALTER TABLE contests ADD COLUMN duration_minutes INTEGER");
 }
+// 定期コンテストから自動生成された回はその設定IDを持つ（重複生成防止・紐付け用）
+if (!curCols.includes('recurring_id')) {
+  db.run("ALTER TABLE contests ADD COLUMN recurring_id TEXT");
+}
+// レート変動の有無。adminのみ rated=1 のコンテストを作成できる。
+// 既存データは従来どおりレート対象として扱うため 1 で埋める。
+if (!curCols.includes('rated')) {
+  db.run("ALTER TABLE contests ADD COLUMN rated INTEGER NOT NULL DEFAULT 1");
+}
+
+// 定期開催の設定（毎日 / 毎週）。スケジューラが開始の前日に各回を生成する。
+db.run(`
+  CREATE TABLE IF NOT EXISTS recurring_contests (
+    id               TEXT PRIMARY KEY,
+    title            TEXT NOT NULL,         -- ベースタイトル（生成時に日付を付与）
+    freq             TEXT NOT NULL,         -- 'daily' | 'weekly'
+    weekday          INTEGER,               -- 0=日..6=土 (weeklyのみ, JST基準)
+    hour             INTEGER NOT NULL,      -- 開始時刻 時 0-23 (JST)
+    minute           INTEGER NOT NULL,      -- 開始時刻 分 0-59 (JST)
+    duration_minutes INTEGER NOT NULL,
+    mode             TEXT NOT NULL,         -- 'random' | 'color'
+    count            INTEGER,               -- random用 問題数
+    color_spec       TEXT,                  -- color用 JSON ({"cyan":2,...})
+    rated            INTEGER NOT NULL DEFAULT 0, -- レート変動（adminのみ1可）
+    enabled          INTEGER NOT NULL DEFAULT 1,
+    created_by       TEXT NOT NULL,         -- traq_id
+    created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
 
 db.run(`
   CREATE TABLE IF NOT EXISTS contest_problems (
@@ -78,9 +107,18 @@ db.run(`
     contest_id  TEXT NOT NULL,
     traq_id     TEXT NOT NULL,
     atcoder_id  TEXT NOT NULL,
+    rated       INTEGER NOT NULL DEFAULT 1,  -- 参加者ごとのレート対象フラグ（本家のRated/Open参加に相当）
     PRIMARY KEY (contest_id, traq_id)
   )
 `);
+// rated カラム追加（旧版から移行。既存行は従来どおりレート対象として 1 で埋める）
+const partCols = db
+  .query<{ name: string }, []>("PRAGMA table_info(participants)")
+  .all()
+  .map((r) => r.name);
+if (!partCols.includes('rated')) {
+  db.run("ALTER TABLE participants ADD COLUMN rated INTEGER NOT NULL DEFAULT 1");
+}
 
 db.run(`
   CREATE TABLE IF NOT EXISTS sessions (

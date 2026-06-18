@@ -3,6 +3,7 @@ export const API = 'http://localhost:3000';
 export type User = {
   traqId: string;
   atcoderId: string | null;
+  isAdmin: boolean;
 };
 
 export type RatingInfo = {
@@ -26,7 +27,7 @@ export type Problem = {
   points: number;
 };
 
-export type Participant = { traq_id: string; atcoder_id: string };
+export type Participant = { traq_id: string; atcoder_id: string; rated: number };
 
 export type ProblemResult = {
   solved: boolean;
@@ -38,6 +39,7 @@ export type StandingRow = {
   rank: number;
   traqId: string;
   atcoderId: string;
+  rated: boolean;
   score: number;
   penaltySeconds: number;
   perf: number | null;
@@ -63,6 +65,7 @@ export type ContestSummary = {
   created_at: string;
   start_at: string | null;
   duration_minutes: number | null;
+  rated: number;            // 0 | 1
   problem_count: number;
 };
 
@@ -71,6 +74,37 @@ export type ContestDetail = {
   problems: Problem[];
   participants: Participant[];
   canViewProblems: boolean;
+};
+
+export type RecurrenceFreq = 'daily' | 'weekly';
+export type RecurringMode = 'random' | 'color';
+
+export type RecurringContest = {
+  id: string;
+  title: string;
+  freq: RecurrenceFreq;
+  weekday: number | null;       // 0=日..6=土 (weeklyのみ)
+  hour: number;
+  minute: number;
+  duration_minutes: number;
+  mode: RecurringMode;
+  count: number | null;
+  color_spec: string | null;    // JSON文字列
+  rated: number;                // 0 | 1
+  enabled: number;              // 0 | 1
+  created_by: string;
+  created_at: string;
+};
+
+export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
+
+// 設定の繰り返しを人間可読な文字列に（例: 「毎週水曜 21:00」「毎日 12:30」）
+export const recurrenceLabel = (r: RecurringContest): string => {
+  const time = `${String(r.hour).padStart(2, '0')}:${String(r.minute).padStart(2, '0')}`;
+  if (r.freq === 'weekly' && r.weekday !== null) {
+    return `毎週${WEEKDAY_LABELS[r.weekday]}曜 ${time}`;
+  }
+  return `毎日 ${time}`;
 };
 
 // AtCoderのレート帯色。light=従来色 / dark=暗背景でも見やすい明るめの色。
@@ -188,6 +222,7 @@ export const api = {
     urls?: string[];
     startAt: string;
     durationMinutes: number;
+    rated?: boolean;
   }): Promise<{ id: string } | { error: string }> {
     const res = await fetch(`${API}/api/contests`, {
       method: 'POST',
@@ -204,11 +239,14 @@ export const api = {
     });
     return res.json() as Promise<{ ok: true } | { error: string }>;
   },
-  async joinContest(id: string): Promise<{ ok: true } | { error: string }> {
+  async joinContest(id: string, rated: boolean): Promise<{ ok: true; rated: boolean } | { error: string }> {
     const res = await fetch(`${API}/api/contests/${id}/join`, {
-      method: 'POST', credentials: 'include',
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rated }),
     });
-    return res.json() as Promise<{ ok: true } | { error: string }>;
+    return res.json() as Promise<{ ok: true; rated: boolean } | { error: string }>;
   },
   async leaveContest(id: string): Promise<{ ok: true } | { error: string }> {
     const res = await fetch(`${API}/api/contests/${id}/leave`, {
@@ -220,6 +258,47 @@ export const api = {
     const res = await fetch(`${API}/api/contests/${id}/standings`, { credentials: 'include' });
     if (!res.ok) return null;
     return res.json() as Promise<Standings>;
+  },
+  async listRecurring(): Promise<RecurringContest[]> {
+    const res = await fetch(`${API}/api/recurring`, { credentials: 'include' });
+    const { recurring } = await res.json() as { recurring: RecurringContest[] };
+    return recurring;
+  },
+  async createRecurring(body: {
+    title?: string;
+    freq: RecurrenceFreq;
+    weekday?: number;
+    hour: number;
+    minute: number;
+    durationMinutes: number;
+    mode: RecurringMode;
+    count?: number;
+    colorSpec?: Partial<Record<ColorKey, number>>;
+    rated?: boolean;
+  }): Promise<{ id: string } | { error: string }> {
+    const res = await fetch(`${API}/api/recurring`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json() as Promise<{ id: string } | { error: string }>;
+  },
+  async toggleRecurring(id: string, enabled: boolean): Promise<{ ok: true } | { error: string }> {
+    const res = await fetch(`${API}/api/recurring/${id}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+    return res.json() as Promise<{ ok: true } | { error: string }>;
+  },
+  async deleteRecurring(id: string): Promise<{ ok: true } | { error: string }> {
+    const res = await fetch(`${API}/api/recurring/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    return res.json() as Promise<{ ok: true } | { error: string }>;
   },
   logout(): Promise<Response> {
     return fetch(`${API}/api/auth/logout`, { method: 'POST', credentials: 'include' });

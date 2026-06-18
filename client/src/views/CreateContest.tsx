@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, COLOR_DEFS, colorHex, type ColorKey, type ContestMode } from '../api';
+import { api, COLOR_DEFS, colorHex, type ColorKey, type ContestMode, type User } from '../api';
 
 type Mode = ContestMode;
 
@@ -11,10 +11,11 @@ const defaultStart = (): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-export default function CreateContest() {
+export default function CreateContest({ user }: { user: User }) {
   const [title, setTitle] = useState('');
   const [startAt, setStartAt] = useState(defaultStart);
   const [duration, setDuration] = useState(100);
+  const [rated, setRated] = useState(false);
   const [mode, setMode] = useState<Mode>('random');
   const [count, setCount] = useState(6);
   const [colorSpec, setColorSpec] = useState<Record<ColorKey, number>>({
@@ -37,7 +38,8 @@ export default function CreateContest() {
     setSubmitting(true);
     // datetime-local はローカル時刻。ISO(UTC)に変換して送る
     const startIso = new Date(startAt).toISOString();
-    const common = { title, startAt: startIso, durationMinutes: duration };
+    // レート変動はadminのみ指定可能
+    const common = { title, startAt: startIso, durationMinutes: duration, rated: user.isAdmin && rated };
     const body =
       mode === 'random'
         ? { ...common, mode, count }
@@ -92,6 +94,17 @@ export default function CreateContest() {
             />
           </div>
         </div>
+
+        {user.isAdmin && (
+          <label className="checkbox-row" style={{ marginTop: 16 }}>
+            <input
+              type="checkbox"
+              checked={rated}
+              onChange={(e) => setRated(e.target.checked)}
+            />
+            <span>レート変動させる（admin専用）</span>
+          </label>
+        )}
 
         <label style={{ marginTop: 20 }}>出題方式</label>
         <div className="seg">

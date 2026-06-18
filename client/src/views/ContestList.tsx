@@ -17,7 +17,10 @@ const SECTIONS: { status: ContestStatus; label: string; emoji: string }[] = [
 const ContestItem = ({ c }: { c: ContestSummary }) => (
   <li>
     <a href={`#/contests/${c.id}`}>
-      <span className="contest-title">{c.title}</span>
+      <span className="contest-title">
+        {c.title}
+        {c.rated === 1 && <span className="rated-badge">Rated</span>}
+      </span>
       <span className="contest-meta">
         🗓 {fmtDateTime(c.start_at)} ・ {c.duration_minutes ?? '?'}分
       </span>

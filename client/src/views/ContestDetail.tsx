@@ -19,10 +19,10 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
 
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [id]);
 
-  const handleJoin = async () => {
+  const handleJoin = async (rated: boolean) => {
     setJoining(true);
     setError('');
-    const res = await api.joinContest(id);
+    const res = await api.joinContest(id, rated);
     setJoining(false);
     if ('ok' in res) {
       await reload();
@@ -30,16 +30,21 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
     } else if (res.error === 'atcoder id not registered') {
       setError('参加するにはマイページでAtCoder IDを登録してください');
     } else {
-      setError('参加に失敗しました');
+      setError(res.error ?? '参加に失敗しました');
     }
   };
 
   const handleLeave = async () => {
     setJoining(true);
-    await api.leaveContest(id);
+    setError('');
+    const res = await api.leaveContest(id);
     setJoining(false);
-    await reload();
-    setStandingsKey((k) => k + 1);
+    if ('ok' in res) {
+      await reload();
+      setStandingsKey((k) => k + 1);
+    } else {
+      setError(res.error ?? '参加の取り消しに失敗しました');
+    }
   };
 
   const handleDelete = async () => {
@@ -67,7 +72,10 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
   if (!data) return <div className="card"><p className="msg">読み込み中...</p></div>;
 
   const isOwner = data.contest.created_by === meId;
-  const joined = data.participants.some((p) => p.traq_id === meId);
+  const self = data.participants.find((p) => p.traq_id === meId);
+  const joined = !!self;
+  const status = contestStatus(data.contest.start_at, data.contest.duration_minutes);
+  const isRatedContest = data.contest.rated === 1;
 
   // 問題一覧が見られない理由（参加済み かつ 開催時間中のみ表示）
   const problemsHiddenReason = (): string => {
@@ -81,7 +89,10 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
   return (
     <div className="card card-wide">
       <div className="card-head">
-        <h1>{data.contest.title}</h1>
+        <h1>
+          {data.contest.title}
+          {data.contest.rated === 1 && <span className="rated-badge">Rated</span>}
+        </h1>
         <a className="btn btn-ghost btn-inline" href="#/contests">一覧</a>
       </div>
       <p className="hint">
@@ -90,22 +101,42 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
       </p>
       <p className="hint">
         作成: @{data.contest.created_by} ・ {modeLabel(data.contest.mode)} ・ 参加 {data.participants.length}人
+        ・ {data.contest.rated === 1 ? 'レート変動あり' : 'レート変動なし'}
       </p>
 
       <div className="join-row">
         {joined ? (
           <>
-            <span className="joined-badge">✓ 参加中</span>
-            <button className="btn btn-ghost btn-inline" onClick={handleLeave} disabled={joining}>
+            <span className="joined-badge">
+              ✓ {self!.rated === 1 ? 'Rated参加中' : 'オープン参加中'}
+            </span>
+            <button
+              className="btn btn-ghost btn-inline"
+              onClick={handleLeave}
+              disabled={joining || status === 'ongoing'}
+              title={status === 'ongoing' ? 'コンテスト中は参加を取り消せません' : ''}
+            >
               参加取消
             </button>
           </>
+        ) : isRatedContest ? (
+          <>
+            <button className="btn btn-primary btn-inline" onClick={() => handleJoin(true)} disabled={joining}>
+              {joining ? '処理中...' : 'Rated参加'}
+            </button>
+            <button className="btn btn-ghost btn-inline" onClick={() => handleJoin(false)} disabled={joining}>
+              オープン参加（Unrated）
+            </button>
+          </>
         ) : (
-          <button className="btn btn-primary btn-inline" onClick={handleJoin} disabled={joining}>
+          <button className="btn btn-primary btn-inline" onClick={() => handleJoin(false)} disabled={joining}>
             {joining ? '処理中...' : 'このコンテストに参加'}
           </button>
         )}
       </div>
+      {joined && status === 'ongoing' && (
+        <p className="hint">コンテスト中は参加の取り消しはできません。</p>
+      )}
 
       {error && <p className="msg error">{error}</p>}
 

@@ -77,6 +77,7 @@ export default function Standings({ contestId }: { contestId: string }) {
                     <span className="user-id">
                       <img className="avatar" src={TRAQ_ICON(r.traqId)} alt="" width={22} height={22} />
                       @{r.traqId}
+                      {!r.rated && <span className="muted-badge">Open</span>}
                     </span>
                   </td>
                   <td className="st-total">
