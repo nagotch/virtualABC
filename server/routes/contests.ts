@@ -3,7 +3,6 @@ import { getCookie } from 'hono/cookie';
 import db from '../db';
 import {
   COLORS,
-  fetchUserSubmissions,
   generateByColor,
   generateManual,
   generateRandom,
@@ -211,9 +210,9 @@ app.post('/:id/leave', (c) => {
 });
 
 // GET /api/contests/:id/standings → 順位表（開催時間内の提出で集計）
-app.get('/:id/standings', async (c) => {
+app.get('/:id/standings', (c) => {
   const id = c.req.param('id');
-  const standings = await computeStandings(id);
+  const standings = computeStandings(id);
   if (!standings) return c.json({ error: 'not found' }, 404);
   return c.json(standings);
 });
@@ -241,9 +240,11 @@ app.delete('/:id', (c) => {
 });
 
 // ---- 順位表の集計 ----
+// 提出データはユーザースクリプト(reported_submissions)から取得する。
+// 各参加者がAtCoderにログイン済みのブラウザで提出すると、スクリプトが結果を
+// このサーバーに報告する。AtCoder Problemsのクロール遅延に依存しない。
 
 const PENALTY_PER_WRONG = 5 * 60; // 1誤答あたり5分（秒）
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type ProblemResult = {
   solved: boolean;
@@ -264,11 +265,22 @@ type Standings = {
   rows: StandingRow[];
 };
 
-// 短時間キャッシュ（連打・複数閲覧でAtCoder Problemsを叩きすぎない）
-const standingsCache = new Map<string, { at: number; data: Standings }>();
-const STANDINGS_TTL = 30 * 1000;
+type ReportedSub = { problem_id: string; result: string; epoch_second: number };
 
-const computeStandings = async (contestId: string): Promise<Standings | null> => {
+// 報告された提出はDBから即時に読めるのでキャッシュは不要だが、
+// 提出報告時にキャッシュを無効化するための仕組みは維持する。
+const standingsCache = new Map<string, { at: number; data: Standings }>();
+const STANDINGS_TTL = 5 * 1000;
+
+// あるAtCoder IDが参加するコンテストの順位表キャッシュを無効化
+export const invalidateStandingsForAtcoder = (atcoderId: string): void => {
+  const contestIds = db.query<{ contest_id: string }, [string]>(
+    'SELECT contest_id FROM participants WHERE atcoder_id = ?',
+  ).all(atcoderId);
+  for (const { contest_id } of contestIds) standingsCache.delete(contest_id);
+};
+
+const computeStandings = (contestId: string): Standings | null => {
   const cached = standingsCache.get(contestId);
   if (cached && Date.now() - cached.at < STANDINGS_TTL) return cached.data;
 
@@ -291,23 +303,18 @@ const computeStandings = async (contestId: string): Promise<Standings | null> =>
   const problemIds = new Set(problems.map((p) => p.problem_id));
   const pointsOf = new Map(problems.map((p) => [p.problem_id, p.points]));
 
-  console.log(`[standings] computing ${contestId}: ${participants.length} participants`);
-  const t0 = Date.now();
+  const querySubs = db.query<ReportedSub, [string, number, number]>(
+    `SELECT problem_id, result, epoch_second FROM reported_submissions
+     WHERE atcoder_id = ? AND epoch_second BETWEEN ? AND ? ORDER BY epoch_second`,
+  );
 
   const rows: StandingRow[] = [];
   for (const part of participants) {
-    let subs: Awaited<ReturnType<typeof fetchUserSubmissions>> = [];
-    try {
-      subs = await fetchUserSubmissions(part.atcoder_id, startUnix);
-    } catch (e) {
-      console.error(`[standings] submissions fetch failed for ${part.atcoder_id}:`, e);
-    }
+    const subs = querySubs.all(part.atcoder_id, startUnix, endUnix)
+      .filter((s) => problemIds.has(s.problem_id));
 
-    // 対象問題・開催時間内に絞り、問題ごとに時系列で整理
-    const byProblem = new Map<string, typeof subs>();
+    const byProblem = new Map<string, ReportedSub[]>();
     for (const s of subs) {
-      if (s.epoch_second > endUnix) continue;
-      if (!problemIds.has(s.problem_id)) continue;
       (byProblem.get(s.problem_id) ?? byProblem.set(s.problem_id, []).get(s.problem_id)!).push(s);
     }
 
@@ -316,7 +323,7 @@ const computeStandings = async (contestId: string): Promise<Standings | null> =>
     let lastAcRel = 0;
     let totalPenalties = 0;
     for (const pid of problemIds) {
-      const list = (byProblem.get(pid) ?? []).sort((a, b) => a.epoch_second - b.epoch_second);
+      const list = byProblem.get(pid) ?? [];
       let penalties = 0;
       let acTime: number | null = null;
       for (const s of list) {
@@ -324,7 +331,6 @@ const computeStandings = async (contestId: string): Promise<Standings | null> =>
         penalties++;
       }
       const solved = acTime !== null;
-      // penalties: 解いたならAC前の誤答数、未解答なら誤答（挑戦）回数
       pres[pid] = { solved, penalties, acTimeSeconds: acTime };
       if (solved) {
         score += pointsOf.get(pid) ?? 0;
@@ -341,8 +347,6 @@ const computeStandings = async (contestId: string): Promise<Standings | null> =>
       penaltySeconds: score > 0 ? lastAcRel + PENALTY_PER_WRONG * totalPenalties : 0,
       problems: pres,
     });
-
-    await sleep(150); // 参加者間でも少し間隔をあける
   }
 
   // 得点降順、同点はペナルティ昇順
@@ -355,7 +359,6 @@ const computeStandings = async (contestId: string): Promise<Standings | null> =>
     prev = { score: r.score, pen: r.penaltySeconds };
   });
 
-  console.log(`[standings] done ${contestId} in ${Date.now() - t0}ms`);
   const data: Standings = { contest, problems, rows };
   standingsCache.set(contestId, { at: Date.now(), data });
   return data;

@@ -90,4 +90,26 @@ db.run(`
   )
 `);
 
+// ユーザースクリプトからの提出報告に使うトークン（ユーザーごと）
+const userCols = db
+  .query<{ name: string }, []>("PRAGMA table_info(users)")
+  .all()
+  .map((r) => r.name);
+if (!userCols.includes('api_token')) {
+  db.run("ALTER TABLE users ADD COLUMN api_token TEXT");
+}
+
+// ユーザースクリプトが報告したAtCoder提出（リアルタイム順位表用）
+db.run(`
+  CREATE TABLE IF NOT EXISTS reported_submissions (
+    submission_id INTEGER PRIMARY KEY,   -- AtCoderの提出ID（冪等性のためPK）
+    atcoder_id    TEXT NOT NULL,
+    problem_id    TEXT NOT NULL,
+    result        TEXT NOT NULL,         -- AC, WA, ...
+    epoch_second  INTEGER NOT NULL,      -- 提出時刻(unix)
+    reported_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+db.run('CREATE INDEX IF NOT EXISTS idx_reported_atcoder ON reported_submissions (atcoder_id, epoch_second)');
+
 export default db;

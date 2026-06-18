@@ -47,7 +47,7 @@ export default function Standings({ contestId }: { contestId: string }) {
       </div>
 
       <p className="hint" style={{ marginBottom: 12 }}>
-        ※ 提出はAtCoder Problemsの取り込み後に反映されます（数分〜十数分の遅延あり）。少し待って「更新」を押してください。
+        ※ ユーザースクリプト(Tampermonkey)を入れた参加者の提出がリアルタイムで反映されます。反映されない場合は「更新」を押してください。
       </p>
 
       {data.rows.length === 0 ? (

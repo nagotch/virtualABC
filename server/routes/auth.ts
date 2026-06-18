@@ -109,6 +109,29 @@ app.get('/me', (c) => {
   });
 });
 
+// GET /api/auth/token → ユーザースクリプト用トークンを取得（無ければ生成）
+app.get('/token', (c) => {
+  const sessionId = getCookie(c, 'session');
+  if (!sessionId) return c.json({ error: 'unauthorized' }, 401);
+
+  const row = db.query<{ traq_id: string }, [string]>(
+    'SELECT traq_id FROM sessions WHERE id = ?',
+  ).get(sessionId);
+  if (!row) return c.json({ error: 'unauthorized' }, 401);
+
+  const user = db.query<{ atcoder_id: string; api_token: string | null }, [string]>(
+    'SELECT atcoder_id, api_token FROM users WHERE traq_id = ?',
+  ).get(row.traq_id);
+  if (!user) return c.json({ error: 'register atcoder id first' }, 400);
+
+  let token = user.api_token;
+  if (!token) {
+    token = generateState() + generateState(); // 十分長いランダム文字列
+    db.run('UPDATE users SET api_token = ? WHERE traq_id = ?', [token, row.traq_id]);
+  }
+  return c.json({ token });
+});
+
 // POST /api/auth/logout
 app.post('/logout', (c) => {
   const sessionId = getCookie(c, 'session');

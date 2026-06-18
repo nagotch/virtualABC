@@ -520,6 +520,33 @@ textarea.text-input {
   white-space: nowrap;
 }
 
+/* ---- token section ---- */
+.token-section {
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.token-row {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.token-row .text-input {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
 /* ---- join row ---- */
 .join-row {
   display: flex;
