@@ -144,6 +144,55 @@
   border: 1px solid var(--border);
 }
 
+.mypage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.mypage-head h1 {
+  margin-bottom: 0;
+}
+
+.avatar-sm {
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+/* ---- contest sections ---- */
+.contest-section {
+  margin-top: 24px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-h);
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.section-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0 0 4px;
+}
+
 .badge {
   font-family: var(--mono);
   font-size: 13px;

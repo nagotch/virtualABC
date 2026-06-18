@@ -81,6 +81,22 @@ export const endIso = (startIso: string | null, minutes: number | null): string 
   return new Date(new Date(startIso).getTime() + minutes * 60_000).toISOString();
 };
 
+export type ContestStatus = 'ongoing' | 'upcoming' | 'finished';
+
+// 現在時刻からコンテストの開催状態を判定する
+export const contestStatus = (
+  startAt: string | null,
+  durationMinutes: number | null,
+  now: number = Date.now(),
+): ContestStatus => {
+  if (!startAt) return 'finished'; // 日時未設定の旧データは終了扱い
+  const start = new Date(startAt).getTime();
+  const end = start + (durationMinutes ?? 0) * 60_000;
+  if (now < start) return 'upcoming';
+  if (now < end) return 'ongoing';
+  return 'finished';
+};
+
 export const api = {
   async me(): Promise<User | null> {
     const res = await fetch(`${API}/api/auth/me`, { credentials: 'include' });

@@ -63,14 +63,21 @@ export default function MyPage({
 
   return (
     <div className="card">
-      <h1>マイページ</h1>
+      <div className="mypage-head">
+        <h1>マイページ</h1>
+        <img
+          className="avatar avatar-sm"
+          src={TRAQ_ICON(user.traqId)}
+          alt={`@${user.traqId}`}
+          title={`@${user.traqId}`}
+          width={36}
+          height={36}
+        />
+      </div>
 
       <div className="field">
         <span className="label">traQ ID</span>
-        <span className="value user-id">
-          <img className="avatar" src={TRAQ_ICON(user.traqId)} alt="" width={28} height={28} />
-          @{user.traqId}
-        </span>
+        <span className="value">@{user.traqId}</span>
       </div>
 
       <div className="field">
