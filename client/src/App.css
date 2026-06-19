@@ -593,6 +593,47 @@ code {
   font-size: 14px;
 }
 
+/* ---- 右下に浮かせる時計（AtCoder風）---- */
+.clock-widget {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  padding: 7px 14px;
+  border-radius: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  pointer-events: none; /* クリックの邪魔をしない */
+}
+.clock-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.clock-value {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-h);
+}
+.clock-contest .clock-value { color: var(--accent); }
+.clock-contest .clock-label { color: var(--accent); }
+.clock-warn .clock-value,
+.clock-warn .clock-label { color: #ef4444; }
+
+@media (max-width: 480px) {
+  .clock-widget { right: 10px; bottom: 10px; padding: 5px 10px; }
+  .clock-value { font-size: 18px; }
+}
+
 /* ---- profile page: タブ＋2カラム（左=プロフィール / 右=グラフ） ---- */
 .profile-tabs {
   display: flex;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, contestStatus, endIso, fmtDateTime, modeLabel, type ContestDetail as Detail } from '../api';
+import { setActiveContest } from '../activeContest';
 import DifficultyCircle from '../components/DifficultyCircle';
 import Standings from './Standings';
 
@@ -18,6 +19,18 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
   };
 
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [id]);
+
+  // 表示中コンテストの開催時刻を時計ウィジェットへ共有（残り時間タイマー用）。
+  useEffect(() => {
+    if (data) {
+      setActiveContest({
+        startAt: data.contest.start_at,
+        durationMinutes: data.contest.duration_minutes,
+      });
+    }
+  }, [data]);
+  // このページを離れたら現在時刻表示に戻す。
+  useEffect(() => () => setActiveContest(null), []);
 
   const handleJoin = async (rated: boolean) => {
     setJoining(true);

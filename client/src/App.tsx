@@ -6,6 +6,7 @@ import ContestList from './views/ContestList';
 import CreateContest from './views/CreateContest';
 import ContestDetail from './views/ContestDetail';
 import RecurringContests from './views/RecurringContests';
+import ClockWidget from './components/ClockWidget';
 
 type Theme = 'light' | 'dark';
 
@@ -128,6 +129,8 @@ function App() {
       ) : (
         <main className="main">{renderRoute()}</main>
       )}
+
+      {user && <ClockWidget />}
     </>
   );
 }
