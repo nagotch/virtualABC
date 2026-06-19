@@ -6,6 +6,7 @@
 import { dbAll, dbRun } from './db';
 import { fetchUserSubmissions } from './atcoder';
 import { invalidateStandingsForAtcoder } from './routes/contests';
+import { notifyFinishedContestsOnce } from './standings-notify';
 
 const POLL_INTERVAL_MS = 3 * 60 * 1000;  // 3分ごと
 const FIRST_DELAY_MS = 15 * 1000;        // 起動15秒後に初回
@@ -78,6 +79,8 @@ export const pollOnce = async (): Promise<void> => {
 export const startPoller = (): void => {
   const loop = async () => {
     await pollOnce();
+    // 提出取り込み後に、終了済みコンテストの確定順位表をtraQへ通知する。
+    await notifyFinishedContestsOnce();
     setTimeout(loop, POLL_INTERVAL_MS); // 完了後に次回を予約
   };
   setTimeout(loop, FIRST_DELAY_MS);

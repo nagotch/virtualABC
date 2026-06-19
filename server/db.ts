@@ -72,7 +72,8 @@ export async function initDb(): Promise<void> {
       start_at         VARCHAR(32),                   -- ISO8601 (UTC)
       duration_minutes INT,
       recurring_id     VARCHAR(32),                   -- 定期生成元の設定ID
-      rated            TINYINT NOT NULL DEFAULT 1     -- レート変動（adminのみ1可）
+      rated            TINYINT NOT NULL DEFAULT 1,    -- レート変動（adminのみ1可）
+      standings_notified TINYINT NOT NULL DEFAULT 0   -- 終了後の順位表通知済みフラグ
     )
   `);
 
@@ -149,6 +150,31 @@ export async function initDb(): Promise<void> {
     ALTER TABLE reported_submissions
       ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'script'
   `);
+
+  // contests に「順位表通知済み」フラグを追加（既存DB移行）。
+  // 列の追加が初回のときだけ、既に終了済みのコンテストを通知済み扱いにして、
+  // デプロイ直後に過去コンテストの結果通知が一斉に飛ぶのを防ぐ。
+  const hasNotifiedCol = await dbGet<{ x: number }>(
+    `SELECT 1 AS x FROM information_schema.columns
+      WHERE table_schema = DATABASE() AND table_name = 'contests'
+        AND column_name = 'standings_notified'`,
+  );
+  await dbRun(`
+    ALTER TABLE contests
+      ADD COLUMN IF NOT EXISTS standings_notified TINYINT NOT NULL DEFAULT 0
+  `);
+  if (!hasNotifiedCol) {
+    const rows = await dbAll<{ id: string; start_at: string | null; duration_minutes: number | null }>(
+      'SELECT id, start_at, duration_minutes FROM contests',
+    );
+    const now = Date.now();
+    for (const r of rows) {
+      const end = r.start_at ? new Date(r.start_at).getTime() + (r.duration_minutes ?? 0) * 60_000 : 0;
+      if (!r.start_at || now >= end) {
+        await dbRun('UPDATE contests SET standings_notified = 1 WHERE id = ?', [r.id]);
+      }
+    }
+  }
 }
 
 export { pool };

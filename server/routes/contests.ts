@@ -360,7 +360,7 @@ type StandingRow = {
   penaltySeconds: number;
   problems: Record<string, ProblemResult>;
 };
-type Standings = {
+export type Standings = {
   contest: { id: string; title: string; start_at: string | null; duration_minutes: number | null };
   problems: { problem_id: string; problem_index: string; points: number; difficulty: number | null }[];
   rows: StandingRow[];
@@ -394,7 +394,7 @@ export const invalidateStandingsForAtcoder = async (atcoderId: string): Promise<
   for (const { contest_id } of contestIds) clearStandings(contest_id);
 };
 
-const computeStandings = async (
+export const computeStandings = async (
   contestId: string,
   mode: StandingsMode,
 ): Promise<Standings | null> => {
