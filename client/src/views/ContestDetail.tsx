@@ -90,11 +90,10 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
   const status = contestStatus(data.contest.start_at, data.contest.duration_minutes);
   const isRatedContest = data.contest.rated === 1;
 
-  // 問題一覧が見られない理由（参加済み かつ 開催時間中のみ表示）
+  // 問題一覧が見られない理由（開始前は非表示、開催中は参加者のみ、終了後は誰でも表示）
   const problemsHiddenReason = (): string => {
     const status = contestStatus(data.contest.start_at, data.contest.duration_minutes);
     if (status === 'upcoming') return '⏳ コンテスト開始までお待ちください。問題は開始後に表示されます。';
-    if (status === 'finished') return '🔒 コンテストは終了しました。問題は表示されません。';
     if (!joined) return '🔒 「参加」すると問題が表示されます。';
     return '🔒 問題は表示できません。';
   };

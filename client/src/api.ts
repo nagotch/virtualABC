@@ -322,6 +322,15 @@ export const api = {
     if (!res.ok) return null;
     return res.json() as Promise<Standings>;
   },
+  // AtCoder Problems から確定提出を強制取得し、順位表・レートを再計算する。
+  async recomputeStandings(id: string): Promise<Standings | null> {
+    const res = await fetch(`${API}/api/contests/${id}/recompute`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    return res.json() as Promise<Standings>;
+  },
   async listRecurring(): Promise<RecurringContest[]> {
     const res = await fetch(`${API}/api/recurring`, { credentials: 'include' });
     const { recurring } = await res.json() as { recurring: RecurringContest[] };
