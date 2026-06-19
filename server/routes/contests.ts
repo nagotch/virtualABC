@@ -287,6 +287,8 @@ app.get('/:id/standings', async (c) => {
 app.post('/:id/recompute', async (c) => {
   const traqId = await getTraqId(getCookie(c, 'session'));
   if (!traqId) return c.json({ error: 'unauthorized' }, 401);
+  // 強制再取得は負荷があるため admin のみ実行可（フロントでもボタンを admin に限定）。
+  if (!isAdmin(traqId)) return c.json({ error: 'forbidden' }, 403);
 
   const id = c.req.param('id');
   const contest = await dbGet<{ start_at: string | null; duration_minutes: number | null }>(

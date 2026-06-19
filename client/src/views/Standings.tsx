@@ -7,7 +7,7 @@ const TRAQ_ICON = (name: string) =>
 // 終了後この時間までは「暫定順位」と表示する（AtCoder Problems への反映待ちを見込む）。
 const PROVISIONAL_LABEL_MS = 24 * 60 * 60 * 1000;
 
-export default function Standings({ contestId }: { contestId: string }) {
+export default function Standings({ contestId, isAdmin }: { contestId: string; isAdmin: boolean }) {
   const [data, setData] = useState<StandingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -64,9 +64,11 @@ export default function Standings({ contestId }: { contestId: string }) {
       <div className="standings-head">
         <h2 className="section-title" style={{ margin: 0 }}>🏆 順位表</h2>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-ghost btn-inline" onClick={recompute} disabled={recomputing || loading}>
-            {recomputing ? '再計算中...' : 'ratingを再計算'}
-          </button>
+          {isAdmin && (
+            <button className="btn btn-ghost btn-inline" onClick={recompute} disabled={recomputing || loading}>
+              {recomputing ? '再集計中...' : '再集計'}
+            </button>
+          )}
           <button className="btn btn-ghost btn-inline" onClick={load} disabled={loading || recomputing}>
             {loading ? '更新中...' : '更新'}
           </button>
@@ -77,7 +79,7 @@ export default function Standings({ contestId }: { contestId: string }) {
         <p className="hint" style={{ marginBottom: 12, color: 'var(--warn, #c77)' }}>
           🔴 <strong>暫定順位</strong>です。AtCoder Problems への反映に時間がかかるため（最大24時間ほど）、
           確定ではありません。反映後に <strong>確定順位</strong> へ切り替わります。
-          AtCoder Problems の不調などで反映が遅い場合は「ratingを再計算」を押すと取り込み直せます。
+          {isAdmin && ' AtCoder Problems の不調などで反映が遅い場合は「再集計」を押すと取り込み直せます。'}
         </p>
       ) : (
         <p className="hint" style={{ marginBottom: 12 }}>

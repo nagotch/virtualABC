@@ -70,7 +70,7 @@ function App() {
     if (path === '/ranking') return <Ranking />;
     if (path === '/guide') return <Guide />;
     const m = path.match(/^\/contests\/(.+)$/);
-    if (m) return <ContestDetail id={m[1]} meId={user.traqId} />;
+    if (m) return <ContestDetail id={m[1]} meId={user.traqId} isAdmin={user.isAdmin} />;
     return <MyPage user={user} onUserChange={setUser} onLogout={handleLogout} />;
   };
 
