@@ -8,7 +8,6 @@ import ContestDetail from './views/ContestDetail';
 import RecurringContests from './views/RecurringContests';
 import Ranking from './views/Ranking';
 import ClockWidget from './components/ClockWidget';
-import { useUserscriptInstalled } from './useUserscriptInstalled';
 
 type Theme = 'light' | 'dark';
 
@@ -34,7 +33,6 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const route = useHashRoute();
-  const scriptInstalled = useUserscriptInstalled();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -100,17 +98,15 @@ function App() {
             {navLink('#/contests', 'コンテスト')}
             {navLink('#/recurring', '定期開催')}
             {navLink('#/ranking', 'ランキング')}
-            {!scriptInstalled && (
-              <a
-                className="nav-link"
-                href="https://nagotch-virtual.trap.show/vabc-reporter.user.js"
-                target="_blank"
-                rel="noreferrer"
-                title="提出報告用ユーザースクリプト（Tampermonkey）をインストール"
-              >
-                📥 スクリプト
-              </a>
-            )}
+            <a
+              className="nav-link"
+              href="https://nagotch-virtual.trap.show/vabc-reporter.user.js"
+              target="_blank"
+              rel="noreferrer"
+              title="提出報告用ユーザースクリプト（Tampermonkey）をインストール"
+            >
+              📥 スクリプト
+            </a>
           </nav>
         )}
 
