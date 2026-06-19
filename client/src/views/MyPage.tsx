@@ -72,14 +72,21 @@ export default function MyPage({
   const registered = !!user.atcoderId;
 
   const renderRating = () => {
-    if (!rating) return <span className="badge unset">確認中...</span>;
+    if (!rating) {
+      return (
+        <div className="rating-hero">
+          <span className="rating-hero-label">レート（独自）</span>
+          <span className="badge unset">確認中...</span>
+        </div>
+      );
+    }
 
     // 予測レートが確定と異なるとき（AtCoder反映待ちの暫定値）だけ併記する。
     const showPredicted =
       rating.predictedRating !== null &&
       (rating.predictedRating !== rating.rating || rating.predictedContests !== rating.contests);
     const predictedNote = showPredicted && (
-      <div className="rating-sub" style={{ marginTop: 4 }}>
+      <div className="rating-hero-predicted">
         予測:{' '}
         <span style={{ color: ratingColor(rating.predictedRating as number), fontWeight: 700 }}>
           {rating.predictedRating}
@@ -91,11 +98,12 @@ export default function MyPage({
     // レートが未確定（Rated参加なし）の場合は 0 として表示する。
     const val = rating.rating ?? 0;
     return (
-      <span className="value" style={{ color: ratingColor(val) }}>
-        {val}
-        <span className="rating-sub"> （{rating.contests}回）</span>
+      <div className="rating-hero">
+        <span className="rating-hero-label">レート（独自）</span>
+        <span className="rating-hero-value" style={{ color: ratingColor(val) }}>{val}</span>
+        <span className="rating-hero-meta">{rating.contests}回参加</span>
         {predictedNote}
-      </span>
+      </div>
     );
   };
 
@@ -145,12 +153,7 @@ export default function MyPage({
                 </span>
               </div>
 
-              {registered && (
-                <div className="field">
-                  <span className="label">レート（独自）</span>
-                  {renderRating()}
-                </div>
-              )}
+              {registered && renderRating()}
 
               {registered && (
                 <label className="checkbox-row" style={{ marginTop: 14 }}>
