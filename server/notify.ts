@@ -19,6 +19,23 @@ const fmtJst = (iso: string): string =>
     weekday: 'short',
   });
 
+// 任意の本文を通知チャンネルへ投稿する。
+// 投稿成功、または設定が無くスキップした場合は true（呼び出し側で「処理済み」扱い可）。
+// 実際の投稿失敗のみ false を返す（呼び出し側で再試行できる）。
+export const postNotification = async (content: string): Promise<boolean> => {
+  if (!TOKEN || !CHANNEL_ID) {
+    console.warn('[notify] TOKEN or TRAQ_NOTIFY_CHANNEL_ID is not set; skip notification');
+    return true;
+  }
+  try {
+    await api.channels.postMessage(CHANNEL_ID, { content, embed: true });
+    return true;
+  } catch (e) {
+    console.error('[notify] failed to post notification:', e);
+    return false;
+  }
+};
+
 export type NotifyContest = {
   id: string;
   title: string;
@@ -43,7 +60,7 @@ export const notifyContestCreated = async (c: NotifyContest): Promise<void> => {
     `- :calendar: 開催: **${fmtJst(c.startAt)}** 〜 ${fmtJst(endAt)}`,
     `- :hourglass: 実施時間: **${c.durationMinutes}分**`,
     `- :page_facing_up: 問題数: ${c.problemCount}問`,
-    `- :bust_in_silhouette: 作成者: @${c.createdBy}`,
+    `- :bust_in_silhouette: 作成者: :@${c.createdBy}:`,
     ``,
     `:link: ${APP_URL}/#/contests/${c.id}`,
   ].join('\n');
