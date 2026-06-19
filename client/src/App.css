@@ -1093,3 +1093,38 @@ code {
   background: var(--accent-bg);
   vertical-align: middle;
 }
+
+/* マイページのレートを目立たせるヒーロー表示 */
+.rating-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 16px;
+  padding: 18px 16px;
+  width: 100%;
+  background: var(--accent-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.rating-hero-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+.rating-hero-value {
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -1px;
+}
+.rating-hero-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.rating-hero-predicted {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
