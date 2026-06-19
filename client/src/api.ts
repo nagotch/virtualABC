@@ -18,12 +18,26 @@ export type RatingInfo = {
   predictedContests: number;      // 予測レート算出に使ったコンテスト数
 };
 
+// グラフ描画用の1点（RatingChartが受け取る形）。
 export type RatingHistoryPoint = {
   contestId: string;
   title: string;
   date: string;     // ISO8601（コンテスト開始日時）
   perf: number;     // そのコンテストのパフォーマンス
   rating: number;   // そのコンテスト終了時点での累積レート
+};
+
+// プロフィールのコンテスト成績1行（グラフ・成績表で共用）。
+export type ContestHistoryRow = {
+  contestId: string;
+  title: string;
+  date: string;
+  rated: boolean;            // このコンテストでRated参加だったか
+  rank: number;
+  participantCount: number;
+  perf: number;
+  newRating: number | null;  // Rated時のみ
+  diff: number | null;       // Rated時のみ
 };
 
 export type ColorKey =
@@ -214,10 +228,10 @@ export const api = {
     if (!res.ok) return null;
     return res.json() as Promise<RatingInfo>;
   },
-  async ratingHistory(): Promise<RatingHistoryPoint[]> {
-    const res = await fetch(`${API}/api/users/rating-history`, { credentials: 'include' });
+  async contestHistory(): Promise<ContestHistoryRow[]> {
+    const res = await fetch(`${API}/api/users/contest-history`, { credentials: 'include' });
     if (!res.ok) return [];
-    const { history } = await res.json() as { history: RatingHistoryPoint[] };
+    const { history } = await res.json() as { history: ContestHistoryRow[] };
     return history;
   },
   async register(atcoderId: string): Promise<boolean> {

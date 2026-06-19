@@ -557,48 +557,77 @@ export const getUserPerfHistory = async (
   return perfs;
 };
 
-// レート推移グラフ用の1点。
-export type RatingHistoryPoint = {
+// プロフィール用のコンテスト成績1行（グラフ・成績表で共用）。
+export type ContestHistoryRow = {
   contestId: string;
   title: string;
-  date: string;     // ISO8601（コンテスト開始日時）
-  perf: number;     // そのコンテストのパフォーマンス（0完は0）
-  rating: number;   // そのコンテスト終了時点での累積レート
+  date: string;              // ISO8601（コンテスト開始日時）
+  rated: boolean;            // このコンテストでRated参加だったか
+  rank: number;              // 順位
+  participantCount: number;  // 参加者数
+  perf: number;              // パフォーマンス（0完は0）
+  newRating: number | null;  // Rated時のみ: このコンテスト後の累積レート
+  diff: number | null;       // Rated時のみ: 前回からの変化量
 };
 
-// Rated参加かつ終了済みのコンテストを「古い順」に並べ、各時点の perf と
-// 累積レートを返す。AtCoder同様のレート推移グラフ用。
+// ユーザーが参加した「終了済み」コンテストを新しい順に返す。
+// Rated参加のものだけ累積レート(newRating)と差分(diff)を持つ（AtCoder成績表と同様）。
+// グラフ側は rated かつ newRating!=null の行を使う。
 // mode='official' は AtCoder Problems 由来(source='api')のみ＝確定。
-export const getUserRatingHistory = async (
+export const getUserContestHistory = async (
   traqId: string,
   mode: StandingsMode,
-): Promise<RatingHistoryPoint[]> => {
+): Promise<ContestHistoryRow[]> => {
   const now = Date.now();
   const contests = await dbAll<
-    { id: string; title: string; start_at: string | null; duration_minutes: number | null }
+    {
+      id: string; title: string; start_at: string | null; duration_minutes: number | null;
+      contest_rated: number; part_rated: number;
+    }
   >(`
-    SELECT c.id, c.title, c.start_at, c.duration_minutes
+    SELECT c.id, c.title, c.start_at, c.duration_minutes,
+           c.rated AS contest_rated, p.rated AS part_rated
     FROM contests c JOIN participants p ON p.contest_id = c.id
-    WHERE p.traq_id = ? AND c.rated = 1 AND p.rated = 1
+    WHERE p.traq_id = ?
     ORDER BY c.start_at ASC
   `, [traqId]);
 
-  const points: RatingHistoryPoint[] = [];
-  const chronoPerfs: number[] = []; // 古い→新しい
+  const rows: ContestHistoryRow[] = [];
+  const chronoPerfs: number[] = []; // Rated参加のperfのみ（古い→新しい）
+  let prevRating = 0;
   for (const c of contests) {
     if (!c.start_at) continue;
     const end = new Date(c.start_at).getTime() + (c.duration_minutes ?? 0) * 60_000;
-    if (now < end) continue;
+    if (now < end) continue; // 終了していないコンテストは成績に含めない
     const st = await computeStandings(c.id, mode);
     const row = st?.rows.find((r) => r.traqId === traqId);
     if (!row) continue;
+
+    const ratedParticipation = c.contest_rated === 1 && c.part_rated === 1;
     const perf = row.perf ?? 0;
-    chronoPerfs.push(perf);
-    // computeRating は「最新が先頭」を期待するため、現時点までを逆順に渡す。
-    const rating = computeRating([...chronoPerfs].reverse()) ?? 0;
-    points.push({ contestId: c.id, title: c.title, date: c.start_at, perf, rating });
+    let newRating: number | null = null;
+    let diff: number | null = null;
+    if (ratedParticipation) {
+      chronoPerfs.push(perf);
+      // computeRating は「最新が先頭」を期待するため逆順に渡す。
+      newRating = computeRating([...chronoPerfs].reverse()) ?? 0;
+      diff = newRating - prevRating;
+      prevRating = newRating;
+    }
+    rows.push({
+      contestId: c.id,
+      title: c.title,
+      date: c.start_at,
+      rated: ratedParticipation,
+      rank: row.rank,
+      participantCount: st!.rows.length,
+      perf,
+      newRating,
+      diff,
+    });
   }
-  return points;
+  rows.reverse(); // 新しい順（表の既定表示）
+  return rows;
 };
 
 export default app;
