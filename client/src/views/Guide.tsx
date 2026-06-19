@@ -17,6 +17,13 @@ export default function Guide() {
         下の手順ではじめましょう。
       </p>
 
+      <p className="hint" style={{ marginTop: 12 }}>
+        📌 <strong>ユーザースクリプト（手順2・3）は任意です。</strong>
+        入れなくても遊べます。提出は AtCoder Problems から自動で取り込まれ、順位表・レートに反映されます
+        （反映には少し時間がかかります）。スクリプトを入れると、コンテスト中にボタンひとつで
+        「予測順位」へ<strong>即時反映</strong>できて便利になります。
+      </p>
+
       <ol className="guide-steps">
         <li className="guide-step">
           <span className="guide-num">1</span>
@@ -33,7 +40,7 @@ export default function Guide() {
         <li className="guide-step">
           <span className="guide-num">2</span>
           <div className="guide-body">
-            <h3>Tampermonkey（拡張機能）を入れる</h3>
+            <h3>Tampermonkey（拡張機能）を入れる<span className="guide-optional">任意</span></h3>
             <p className="hint">
               ユーザースクリプトを動かすための拡張機能です。入っていない場合は
               {' '}{extLink(TAMPERMONKEY_URL, 'Tampermonkey 公式サイト')} からお使いのブラウザに追加します。
@@ -45,7 +52,7 @@ export default function Guide() {
         <li className="guide-step">
           <span className="guide-num">3</span>
           <div className="guide-body">
-            <h3>ユーザースクリプトを入れる</h3>
+            <h3>ユーザースクリプトを入れる<span className="guide-optional">任意</span></h3>
             <p className="hint">
               ヘッダーの「📥 スクリプト」または下のリンクをクリックすると、Tampermonkey のインストール画面が開きます。
               「インストール」を押すだけでOK（接続先は設定済み・自分の提出だけ報告します）。
@@ -61,8 +68,9 @@ export default function Guide() {
           <div className="guide-body">
             <h3>コンテストに出場する</h3>
             <p className="hint">
-              「コンテスト」から開催中・予定のコンテストに<strong>参加</strong>します。コンテスト中に AtCoder で問題を解いて提出し、
-              その<strong>提出詳細ページの左下に出るボタン</strong>を押すと、結果が順位表（予測）に反映されます。
+              「コンテスト」から開催中・予定のコンテストに<strong>参加</strong>し、AtCoder で問題を解いて提出します。
+              提出結果は AtCoder Problems から<strong>自動で取り込まれて順位表・レートに反映</strong>されます。
+              スクリプトを入れている場合は、<strong>提出詳細ページの左下に出るボタン</strong>を押すと「予測順位」へ即時反映できます。
             </p>
             <a className="btn btn-ghost btn-inline" href="#/contests">コンテスト一覧へ</a>
           </div>
