@@ -1053,10 +1053,11 @@ code {
   opacity: 0.6;
 }
 
-/* コンテスト削除ボタン: 右下隅に控えめに表示（誤操作・乱用防止） */
+/* コンテスト削除ボタン: 左下隅に控えめに表示（誤操作・乱用防止）。
+   右下は時計ウィジェットと重なって押せないため左寄せにする。 */
 .delete-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   margin-top: 28px;
 }
 .btn-delete-mini {
