@@ -1,7 +1,7 @@
 :root {
-  --text: #4b5563;
+  --text: #1f2937;
   --text-h: #0f172a;
-  --text-muted: #94a3b8;
+  --text-muted: #4b5563;
   --bg: #f6f7f9;
   --card-bg: #ffffff;
   --border: #e5e7eb;
@@ -16,7 +16,7 @@
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
-  font: 16px/1.5 var(--sans);
+  font: 17px/1.6 var(--sans);
   color-scheme: light;
   color: var(--text);
   background: var(--bg);
@@ -25,9 +25,9 @@
 }
 
 :root[data-theme='dark'] {
-  --text: #e8ebf0;
+  --text: #eef1f6;
   --text-h: #ffffff;
-  --text-muted: #aab2c0;
+  --text-muted: #c4cbd8;
   --bg: #0f1117;
   --card-bg: #181a21;
   --border: #2a2d37;
