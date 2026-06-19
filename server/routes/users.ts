@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { dbGet, dbRun } from '../db';
-import { getUserPerfHistory, getUserRatingHistory } from './contests';
+import { getUserPerfHistory, getUserContestHistory } from './contests';
 import { computeRating } from '../rating';
 
 const app = new Hono();
@@ -50,13 +50,13 @@ app.get('/rating', async (c) => {
   });
 });
 
-// GET /api/users/rating-history → レート推移グラフ用データ（確定: api由来のみ）。
-// Rated参加かつ終了済みのコンテストを古い順に、perfと累積レートで返す。
-app.get('/rating-history', async (c) => {
+// GET /api/users/contest-history → プロフィールのグラフ・成績表用データ（確定: api由来のみ）。
+// 参加した終了済みコンテストを新しい順に、順位・perf・累積レート・差分で返す。
+app.get('/contest-history', async (c) => {
   const traqId = await getTraqId(getCookie(c, 'session'));
   if (!traqId) return c.json({ error: 'unauthorized' }, 401);
 
-  const history = await getUserRatingHistory(traqId, 'official');
+  const history = await getUserContestHistory(traqId, 'official');
   return c.json({ history });
 });
 
