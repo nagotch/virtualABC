@@ -11,7 +11,7 @@ import { remindUpcomingContestsOnce } from './reminder';
 
 const POLL_INTERVAL_MS = 3 * 60 * 1000;  // 3分ごと
 const FIRST_DELAY_MS = 15 * 1000;        // 起動15秒後に初回
-const GRACE_MS = 24 * 60 * 60 * 1000;    // 終了後24hまでは取り込み続ける（遅延クロール対策）
+const GRACE_MS = 25 * 60 * 60 * 1000;    // 終了後25hまで取り込む（確定通知=24h後の直前まで反映を拾う）
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let running = false;

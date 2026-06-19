@@ -74,8 +74,9 @@ export async function initDb(): Promise<void> {
       duration_minutes INT,
       recurring_id     VARCHAR(32),                   -- 定期生成元の設定ID
       rated            TINYINT NOT NULL DEFAULT 1,    -- レート変動（adminのみ1可）
-      standings_notified TINYINT NOT NULL DEFAULT 0,  -- 終了後の順位表通知済みフラグ
-      reminder_sent    TINYINT NOT NULL DEFAULT 0     -- 開始前リマインド送信済みフラグ
+      standings_notified TINYINT NOT NULL DEFAULT 0,  -- 終了30分後の暫定順位表(api+script)通知済み
+      reminder_sent    TINYINT NOT NULL DEFAULT 0,    -- 開始前リマインド送信済みフラグ
+      final_notified   TINYINT NOT NULL DEFAULT 0     -- 終了24時間後の確定順位表(apiのみ)通知済み
     )
   `);
 
@@ -205,6 +206,34 @@ export async function initDb(): Promise<void> {
       const start = r.start_at ? new Date(r.start_at).getTime() : 0;
       if (!r.start_at || now >= start) {
         await dbRun('UPDATE contests SET reminder_sent = 1 WHERE id = ?', [r.id]);
+      }
+    }
+  }
+
+  // contests に「確定順位表通知済み」フラグを追加（既存DB移行）。
+  // standings_notified が「終了30分後の暫定通知(api+script)」、
+  // final_notified が「終了24時間後の確定通知(apiのみ)」を表す（2段階通知）。
+  // 初回追加時のみ、既に終了から24h以上経ったコンテストは確定通知済み扱いにして、
+  // デプロイ直後に過去分の確定通知が一斉に飛ぶのを防ぐ。
+  const FINAL_DELAY_MS = 24 * 60 * 60 * 1000;
+  const hasFinalCol = await dbGet<{ x: number }>(
+    `SELECT 1 AS x FROM information_schema.columns
+      WHERE table_schema = DATABASE() AND table_name = 'contests'
+        AND column_name = 'final_notified'`,
+  );
+  await dbRun(`
+    ALTER TABLE contests
+      ADD COLUMN IF NOT EXISTS final_notified TINYINT NOT NULL DEFAULT 0
+  `);
+  if (!hasFinalCol) {
+    const rows = await dbAll<{ id: string; start_at: string | null; duration_minutes: number | null }>(
+      'SELECT id, start_at, duration_minutes FROM contests',
+    );
+    const now = Date.now();
+    for (const r of rows) {
+      const end = r.start_at ? new Date(r.start_at).getTime() + (r.duration_minutes ?? 0) * 60_000 : 0;
+      if (!r.start_at || now >= end + FINAL_DELAY_MS) {
+        await dbRun('UPDATE contests SET final_notified = 1 WHERE id = ?', [r.id]);
       }
     }
   }
