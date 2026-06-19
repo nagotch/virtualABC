@@ -11,7 +11,7 @@ import {
 } from '../atcoder';
 import { createContest } from '../contests-core';
 import { isAdmin } from '../admin';
-import { computeRating } from '../rating';
+import { computeRating, positivize } from '../rating';
 
 const app = new Hono();
 
@@ -482,6 +482,9 @@ export const computeStandings = async (
         perf += Math.round((0.5 - usedFrac) * 100);
       }
     }
+    // 最尤推定は易しい問題のみ正解だと負の値になり得る。AtCoder表示と同じく
+    // 400未満は0に漸近する正値へ補正し、perfが負にならないようにする。
+    if (perf !== null) perf = Math.round(positivize(perf));
 
     rows.push({
       rank: 0,

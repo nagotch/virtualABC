@@ -28,8 +28,9 @@ const F_INF = Math.sqrt((RATIO ** 2) / (1 - RATIO ** 2)) / (RATIO / (1 - RATIO))
 const F_1 = F(1); // = 1（RATIOによらず）
 const f = (n: number): number => ((F(n) - F_INF) / (F_1 - F_INF)) * 1200;
 
-// レートが400未満のとき、負にならないよう正の値へ補正（AtCoder表示と同じ式）
-const positivize = (r: number): number =>
+// レート/パフォーマンスが400未満のとき、負にならないよう正の値へ補正（AtCoder表示と同じ式）。
+// 0 に漸近するため結果は常に正。perf表示（routes/contests.ts）でも再利用する。
+export const positivize = (r: number): number =>
   r >= 400 ? r : 400 / Math.exp((400 - r) / 400);
 
 // perfs: performance の履歴。perfs[0] が最新、末尾が最古。
