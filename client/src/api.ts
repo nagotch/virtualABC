@@ -1,4 +1,9 @@
-export const API = 'http://localhost:3000';
+// 本番（ビルド時）は同一オリジン: Path Overlay で backend を同じホストの /api に
+// 配置するため空文字。開発時は別ポートの dev サーバー(:3000)を指す。
+// VITE_API_BASE で明示的に上書きも可能。
+export const API: string =
+  import.meta.env.VITE_API_BASE ??
+  (import.meta.env.DEV ? 'http://localhost:3000' : '');
 
 export type User = {
   traqId: string;

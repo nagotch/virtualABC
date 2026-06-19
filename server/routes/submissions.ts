@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import db from '../db';
+import { dbRun } from '../db';
 import { invalidateStandingsForAtcoder } from './contests';
 
 const app = new Hono();
@@ -30,15 +30,15 @@ app.post('/', async (c) => {
     return c.json({ error: 'invalid fields' }, 400);
   }
 
-  db.run(
-    `INSERT OR REPLACE INTO reported_submissions
+  await dbRun(
+    `REPLACE INTO reported_submissions
        (submission_id, atcoder_id, problem_id, result, epoch_second)
      VALUES (?, ?, ?, ?, ?)`,
     [submissionId, atcoderId, body.problemId, body.result, epochSecond],
   );
 
   // このAtCoder IDが関係する順位表キャッシュを無効化
-  invalidateStandingsForAtcoder(atcoderId);
+  await invalidateStandingsForAtcoder(atcoderId);
 
   return c.json({ ok: true });
 });

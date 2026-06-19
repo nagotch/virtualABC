@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "hono": "^4.12.26",
+    "mysql2": "^3.22.5",
     "traq-bot-ts": "^1.5.2"
   }
 }

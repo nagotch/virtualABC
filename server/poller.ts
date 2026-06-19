@@ -3,7 +3,7 @@
 // reported_submissions に取り込む。これによりスクリプト未導入でも、
 // （AtCoder Problemsのクロール後）いずれ順位表・perf・レートに反映される。
 
-import db from './db';
+import { dbAll, dbRun } from './db';
 import { fetchUserSubmissions } from './atcoder';
 import { invalidateStandingsForAtcoder } from './routes/contests';
 
@@ -12,12 +12,6 @@ const FIRST_DELAY_MS = 15 * 1000;        // 起動15秒後に初回
 const GRACE_MS = 24 * 60 * 60 * 1000;    // 終了後24hまでは取り込み続ける（遅延クロール対策）
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const upsert = db.prepare(
-  `INSERT OR REPLACE INTO reported_submissions
-     (submission_id, atcoder_id, problem_id, result, epoch_second)
-   VALUES (?, ?, ?, ?, ?)`,
-);
-
 let running = false;
 
 export const pollOnce = async (): Promise<void> => {
@@ -25,10 +19,9 @@ export const pollOnce = async (): Promise<void> => {
   running = true;
   try {
     const now = Date.now();
-    const contests = db.query<
-      { id: string; start_at: string | null; duration_minutes: number | null },
-      []
-    >('SELECT id, start_at, duration_minutes FROM contests').all();
+    const contests = await dbAll<
+      { id: string; start_at: string | null; duration_minutes: number | null }
+    >('SELECT id, start_at, duration_minutes FROM contests');
 
     for (const c of contests) {
       if (!c.start_at) continue;
@@ -40,13 +33,13 @@ export const pollOnce = async (): Promise<void> => {
       const startUnix = Math.floor(start / 1000);
       const endUnix = Math.floor(end / 1000);
       const problemIds = new Set(
-        db.query<{ problem_id: string }, [string]>(
-          'SELECT problem_id FROM contest_problems WHERE contest_id = ?',
-        ).all(c.id).map((r) => r.problem_id),
+        (await dbAll<{ problem_id: string }>(
+          'SELECT problem_id FROM contest_problems WHERE contest_id = ?', [c.id],
+        )).map((r) => r.problem_id),
       );
-      const participants = db.query<{ atcoder_id: string }, [string]>(
-        'SELECT atcoder_id FROM participants WHERE contest_id = ?',
-      ).all(c.id);
+      const participants = await dbAll<{ atcoder_id: string }>(
+        'SELECT atcoder_id FROM participants WHERE contest_id = ?', [c.id],
+      );
 
       for (const part of participants) {
         let subs: Awaited<ReturnType<typeof fetchUserSubmissions>> = [];
@@ -61,10 +54,15 @@ export const pollOnce = async (): Promise<void> => {
         for (const s of subs) {
           if (s.epoch_second > endUnix) continue;
           if (!problemIds.has(s.problem_id)) continue;
-          upsert.run(s.id, part.atcoder_id, s.problem_id, s.result, s.epoch_second);
+          await dbRun(
+            `REPLACE INTO reported_submissions
+               (submission_id, atcoder_id, problem_id, result, epoch_second)
+             VALUES (?, ?, ?, ?, ?)`,
+            [s.id, part.atcoder_id, s.problem_id, s.result, s.epoch_second],
+          );
           changed++;
         }
-        if (changed > 0) invalidateStandingsForAtcoder(part.atcoder_id);
+        if (changed > 0) await invalidateStandingsForAtcoder(part.atcoder_id);
         await sleep(1000); // レート制限への配慮（参加者ごとに1秒空ける）
       }
     }

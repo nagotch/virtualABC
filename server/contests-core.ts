@@ -1,7 +1,7 @@
 // コンテスト実体（contests + contest_problems）の生成ロジック。
 // 手動作成(routes/contests.ts)と定期生成(scheduler.ts)で共有する。
 
-import db from './db';
+import { dbTx } from './db';
 import type { GeneratedProblem } from './atcoder';
 import { notifyContestCreated } from './notify';
 
@@ -10,15 +10,6 @@ export const randomId = (): string => {
   crypto.getRandomValues(buf);
   return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('');
 };
-
-const insertContest = db.prepare(
-  'INSERT INTO contests (id, title, mode, created_by, start_at, duration_minutes, recurring_id, rated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-);
-const insertProblem = db.prepare(
-  `INSERT INTO contest_problems
-     (contest_id, idx, problem_id, atcoder_contest, problem_index, title, difficulty, color, url, points)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-);
 
 export type NewContest = {
   title: string;
@@ -32,18 +23,22 @@ export type NewContest = {
 };
 
 // コンテストと問題セットを保存し、traQへ通知する（通知はベストエフォート）。生成IDを返す。
-export const createContest = (n: NewContest): string => {
+export const createContest = async (n: NewContest): Promise<string> => {
   const id = randomId();
-  const tx = db.transaction(() => {
-    insertContest.run(id, n.title, n.mode, n.createdBy, n.startAtIso, n.durationMinutes, n.recurringId ?? null, n.rated ? 1 : 0);
-    n.problems.forEach((p, i) => {
-      insertProblem.run(
-        id, i, p.id, p.contest_id, p.problem_index, p.title, p.difficulty, p.color, p.url,
-        (i + 1) * 100, // 配点: A=100, B=200, ...
+  await dbTx(async (conn) => {
+    await conn.query(
+      'INSERT INTO contests (id, title, mode, created_by, start_at, duration_minutes, recurring_id, rated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, n.title, n.mode, n.createdBy, n.startAtIso, n.durationMinutes, n.recurringId ?? null, n.rated ? 1 : 0],
+    );
+    for (const [i, p] of n.problems.entries()) {
+      await conn.query(
+        `INSERT INTO contest_problems
+           (contest_id, idx, problem_id, atcoder_contest, problem_index, title, difficulty, color, url, points)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, i, p.id, p.contest_id, p.problem_index, p.title, p.difficulty, p.color, p.url, (i + 1) * 100],
       );
-    });
+    }
   });
-  tx();
 
   void notifyContestCreated({
     id,

@@ -3,7 +3,7 @@
 // その回のコンテスト実体を自動生成する。生成済みは recurring_id + start_at で
 // 重複しないよう冪等にする。時刻はすべて JST 基準で扱う。
 
-import db from './db';
+import { dbAll, dbGet } from './db';
 import { generateByColor, generateRandom, type ColorKey } from './atcoder';
 import { createContest } from './contests-core';
 
@@ -52,10 +52,6 @@ const fmtJstDate = (utcMs: number): string => {
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 };
 
-const existsStmt = db.query<{ id: string }, [string, string]>(
-  'SELECT id FROM contests WHERE recurring_id = ? AND start_at = ?',
-);
-
 let running = false;
 
 export const scheduleTick = async (): Promise<void> => {
@@ -63,15 +59,18 @@ export const scheduleTick = async (): Promise<void> => {
   running = true;
   try {
     const now = Date.now();
-    const rules = db.query<Rule, []>(
-      `SELECT id, title, freq, weekday, hour, minute, duration_minutes, mode, count, color_spec, rated, created_by
+    const rules = await dbAll<Rule>(
+      `SELECT id, title, freq, weekday, hour, minute, duration_minutes, mode, \`count\`, color_spec, rated, created_by
        FROM recurring_contests WHERE enabled = 1`,
-    ).all();
+    );
 
     for (const rule of rules) {
       for (const startUtc of occurrencesWithin(rule, now)) {
         const startIso = new Date(startUtc).toISOString();
-        if (existsStmt.get(rule.id, startIso)) continue; // 生成済み
+        const exists = await dbGet<{ id: string }>(
+          'SELECT id FROM contests WHERE recurring_id = ? AND start_at = ?', [rule.id, startIso],
+        );
+        if (exists) continue; // 生成済み
 
         try {
           const problems = rule.mode === 'random'
@@ -82,7 +81,7 @@ export const scheduleTick = async (): Promise<void> => {
             continue;
           }
           const title = `${rule.title}（${fmtJstDate(startUtc)}）`.slice(0, 100);
-          createContest({
+          await createContest({
             title,
             mode: rule.mode,
             problems,

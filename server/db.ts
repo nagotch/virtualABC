@@ -1,144 +1,145 @@
-import { Database } from 'bun:sqlite';
-import { mkdirSync } from 'fs';
+// データ永続化は MariaDB（mysql2）を使う。
+// NeoShowcase はファイルシステムが再起動で揮発するため、SQLite ではデータが消える。
+// MariaDB の接続情報は NeoShowcase が NS_MARIADB_* 環境変数で注入する。
+// ローカル開発では DB_* もしくは 127.0.0.1 のMariaDBにフォールバックする。
 
-mkdirSync('data', { recursive: true });
+import mysql from 'mysql2/promise';
+import type { Pool, PoolConnection } from 'mysql2/promise';
+import type { RowDataPacket } from 'mysql2';
 
-const db = new Database('data/nagotch_virtual.db', { create: true });
-db.run('PRAGMA journal_mode = WAL');
+const pool: Pool = mysql.createPool({
+  host:     process.env.NS_MARIADB_HOSTNAME ?? process.env.DB_HOST ?? '127.0.0.1',
+  port:     Number(process.env.NS_MARIADB_PORT ?? process.env.DB_PORT ?? 3306),
+  user:     process.env.NS_MARIADB_USER ?? process.env.DB_USER ?? 'root',
+  password: process.env.NS_MARIADB_PASSWORD ?? process.env.DB_PASSWORD ?? '',
+  database: process.env.NS_MARIADB_DATABASE ?? process.env.DB_NAME ?? 'nagotch_virtual',
+  waitForConnections: true,
+  connectionLimit: 5,          // 180MiBメモリ制限のため接続数は控えめに
+  charset: 'utf8mb4',
+});
 
-db.run(`
-  CREATE TABLE IF NOT EXISTS users (
-    traq_id    TEXT PRIMARY KEY,
-    atcoder_id TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  )
-`);
-
-// 旧スキーマ（atcoder_contest列を持つ）から移行。コンテストデータはまだ
-// 本番利用していないため、古い定義の場合は作り直す。
-const contestCols = db
-  .query<{ name: string }, []>("PRAGMA table_info(contests)")
-  .all()
-  .map((r) => r.name);
-if (contestCols.includes('atcoder_contest')) {
-  db.run('DROP TABLE IF EXISTS contests');
-  db.run('DROP TABLE IF EXISTS contest_problems');
+// 1行取得（無ければ undefined）
+export async function dbGet<T>(sql: string, params: unknown[] = []): Promise<T | undefined> {
+  const [rows] = await pool.query<RowDataPacket[]>(sql, params);
+  return (rows[0] as T | undefined) ?? undefined;
 }
 
-db.run(`
-  CREATE TABLE IF NOT EXISTS contests (
-    id          TEXT PRIMARY KEY,
-    title       TEXT NOT NULL,
-    mode        TEXT NOT NULL,            -- 'random' | 'color'
-    created_by  TEXT NOT NULL,            -- traq_id
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-  )
-`);
-
-// 開催日時・実施時間カラムを追加（旧版から移行）
-const curCols = db
-  .query<{ name: string }, []>("PRAGMA table_info(contests)")
-  .all()
-  .map((r) => r.name);
-if (!curCols.includes('start_at')) {
-  db.run("ALTER TABLE contests ADD COLUMN start_at TEXT");          // ISO8601 (UTC)
-}
-if (!curCols.includes('duration_minutes')) {
-  db.run("ALTER TABLE contests ADD COLUMN duration_minutes INTEGER");
-}
-// 定期コンテストから自動生成された回はその設定IDを持つ（重複生成防止・紐付け用）
-if (!curCols.includes('recurring_id')) {
-  db.run("ALTER TABLE contests ADD COLUMN recurring_id TEXT");
-}
-// レート変動の有無。adminのみ rated=1 のコンテストを作成できる。
-// 既存データは従来どおりレート対象として扱うため 1 で埋める。
-if (!curCols.includes('rated')) {
-  db.run("ALTER TABLE contests ADD COLUMN rated INTEGER NOT NULL DEFAULT 1");
+// 全行取得
+export async function dbAll<T>(sql: string, params: unknown[] = []): Promise<T[]> {
+  const [rows] = await pool.query<RowDataPacket[]>(sql, params);
+  return rows as unknown as T[];
 }
 
-// 定期開催の設定（毎日 / 毎週）。スケジューラが開始の前日に各回を生成する。
-db.run(`
-  CREATE TABLE IF NOT EXISTS recurring_contests (
-    id               TEXT PRIMARY KEY,
-    title            TEXT NOT NULL,         -- ベースタイトル（生成時に日付を付与）
-    freq             TEXT NOT NULL,         -- 'daily' | 'weekly'
-    weekday          INTEGER,               -- 0=日..6=土 (weeklyのみ, JST基準)
-    hour             INTEGER NOT NULL,      -- 開始時刻 時 0-23 (JST)
-    minute           INTEGER NOT NULL,      -- 開始時刻 分 0-59 (JST)
-    duration_minutes INTEGER NOT NULL,
-    mode             TEXT NOT NULL,         -- 'random' | 'color'
-    count            INTEGER,               -- random用 問題数
-    color_spec       TEXT,                  -- color用 JSON ({"cyan":2,...})
-    rated            INTEGER NOT NULL DEFAULT 0, -- レート変動（adminのみ1可）
-    enabled          INTEGER NOT NULL DEFAULT 1,
-    created_by       TEXT NOT NULL,         -- traq_id
-    created_at       TEXT NOT NULL DEFAULT (datetime('now'))
-  )
-`);
-
-db.run(`
-  CREATE TABLE IF NOT EXISTS contest_problems (
-    contest_id      TEXT NOT NULL,
-    idx             INTEGER NOT NULL,     -- 表示順 (0始まり)
-    problem_id      TEXT NOT NULL,        -- 例: abc300_a
-    atcoder_contest TEXT NOT NULL,        -- 例: abc300
-    problem_index   TEXT NOT NULL,        -- 例: A
-    title           TEXT NOT NULL,
-    difficulty      INTEGER,              -- 推定難易度 (null可)
-    color           TEXT,                 -- 色キー (null可)
-    url             TEXT NOT NULL,
-    points          INTEGER NOT NULL DEFAULT 100, -- 配点（順位表用）
-    PRIMARY KEY (contest_id, idx)
-  )
-`);
-
-// points カラム追加（旧版から移行。既存行は (idx+1)*100 で埋める）
-const cpCols = db
-  .query<{ name: string }, []>("PRAGMA table_info(contest_problems)")
-  .all()
-  .map((r) => r.name);
-if (!cpCols.includes('points')) {
-  db.run("ALTER TABLE contest_problems ADD COLUMN points INTEGER NOT NULL DEFAULT 100");
-  db.run("UPDATE contest_problems SET points = (idx + 1) * 100");
+// 書き込み（INSERT / UPDATE / DELETE / REPLACE）
+export async function dbRun(sql: string, params: unknown[] = []): Promise<void> {
+  await pool.query(sql, params);
 }
 
-db.run(`
-  CREATE TABLE IF NOT EXISTS participants (
-    contest_id  TEXT NOT NULL,
-    traq_id     TEXT NOT NULL,
-    atcoder_id  TEXT NOT NULL,
-    rated       INTEGER NOT NULL DEFAULT 1,  -- 参加者ごとのレート対象フラグ（本家のRated/Open参加に相当）
-    PRIMARY KEY (contest_id, traq_id)
-  )
-`);
-// rated カラム追加（旧版から移行。既存行は従来どおりレート対象として 1 で埋める）
-const partCols = db
-  .query<{ name: string }, []>("PRAGMA table_info(participants)")
-  .all()
-  .map((r) => r.name);
-if (!partCols.includes('rated')) {
-  db.run("ALTER TABLE participants ADD COLUMN rated INTEGER NOT NULL DEFAULT 1");
+// トランザクション。コールバック内で受け取った接続でクエリを発行する。
+export async function dbTx<T>(fn: (conn: PoolConnection) => Promise<T>): Promise<T> {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const result = await fn(conn);
+    await conn.commit();
+    return result;
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    conn.release();
+  }
 }
 
-db.run(`
-  CREATE TABLE IF NOT EXISTS sessions (
-    id         TEXT PRIMARY KEY,
-    traq_id    TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  )
-`);
+// スキーマ作成。MariaDB は再起動で揮発しないが、初回は空なので毎回 IF NOT EXISTS で用意する。
+// SQLite と違いマイグレーション用の PRAGMA 分岐は不要（最終スキーマを直接定義する）。
+export async function initDb(): Promise<void> {
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS users (
+      traq_id    VARCHAR(64) PRIMARY KEY,
+      atcoder_id VARCHAR(64) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-// ユーザースクリプトが報告したAtCoder提出（リアルタイム順位表用）
-db.run(`
-  CREATE TABLE IF NOT EXISTS reported_submissions (
-    submission_id INTEGER PRIMARY KEY,   -- AtCoderの提出ID（冪等性のためPK）
-    atcoder_id    TEXT NOT NULL,
-    problem_id    TEXT NOT NULL,
-    result        TEXT NOT NULL,         -- AC, WA, ...
-    epoch_second  INTEGER NOT NULL,      -- 提出時刻(unix)
-    reported_at   TEXT NOT NULL DEFAULT (datetime('now'))
-  )
-`);
-db.run('CREATE INDEX IF NOT EXISTS idx_reported_atcoder ON reported_submissions (atcoder_id, epoch_second)');
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS contests (
+      id               VARCHAR(32) PRIMARY KEY,
+      title            VARCHAR(255) NOT NULL,
+      mode             VARCHAR(16) NOT NULL,          -- 'random' | 'color' | 'manual'
+      created_by       VARCHAR(64) NOT NULL,          -- traq_id
+      created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      start_at         VARCHAR(32),                   -- ISO8601 (UTC)
+      duration_minutes INT,
+      recurring_id     VARCHAR(32),                   -- 定期生成元の設定ID
+      rated            TINYINT NOT NULL DEFAULT 1     -- レート変動（adminのみ1可）
+    )
+  `);
 
-export default db;
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS recurring_contests (
+      id               VARCHAR(32) PRIMARY KEY,
+      title            VARCHAR(255) NOT NULL,
+      freq             VARCHAR(16) NOT NULL,          -- 'daily' | 'weekly'
+      weekday          INT,                           -- 0=日..6=土 (weeklyのみ, JST基準)
+      hour             INT NOT NULL,                  -- 開始時刻 時 0-23 (JST)
+      minute           INT NOT NULL,                  -- 開始時刻 分 0-59 (JST)
+      duration_minutes INT NOT NULL,
+      mode             VARCHAR(16) NOT NULL,          -- 'random' | 'color'
+      \`count\`          INT,                           -- random用 問題数
+      color_spec       TEXT,                          -- color用 JSON
+      rated            TINYINT NOT NULL DEFAULT 0,
+      enabled          TINYINT NOT NULL DEFAULT 1,
+      created_by       VARCHAR(64) NOT NULL,
+      created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS contest_problems (
+      contest_id      VARCHAR(32) NOT NULL,
+      idx             INT NOT NULL,                  -- 表示順 (0始まり)
+      problem_id      VARCHAR(64) NOT NULL,          -- 例: abc300_a
+      atcoder_contest VARCHAR(32) NOT NULL,          -- 例: abc300
+      problem_index   VARCHAR(8) NOT NULL,           -- 例: A
+      title           VARCHAR(255) NOT NULL,
+      difficulty      INT,                           -- 推定難易度 (null可)
+      color           VARCHAR(16),                   -- 色キー (null可)
+      url             VARCHAR(255) NOT NULL,
+      points          INT NOT NULL DEFAULT 100,      -- 配点（順位表用）
+      PRIMARY KEY (contest_id, idx)
+    )
+  `);
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS participants (
+      contest_id  VARCHAR(32) NOT NULL,
+      traq_id     VARCHAR(64) NOT NULL,
+      atcoder_id  VARCHAR(64) NOT NULL,
+      rated       TINYINT NOT NULL DEFAULT 1,        -- 参加者ごとのレート対象フラグ
+      PRIMARY KEY (contest_id, traq_id)
+    )
+  `);
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id         VARCHAR(64) PRIMARY KEY,
+      traq_id    VARCHAR(64) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS reported_submissions (
+      submission_id BIGINT PRIMARY KEY,              -- AtCoderの提出ID（冪等性のためPK）
+      atcoder_id    VARCHAR(64) NOT NULL,
+      problem_id    VARCHAR(64) NOT NULL,
+      result        VARCHAR(16) NOT NULL,            -- AC, WA, ...
+      epoch_second  BIGINT NOT NULL,                 -- 提出時刻(unix)
+      reported_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_reported_atcoder (atcoder_id, epoch_second)
+    )
+  `);
+}
+
+export { pool };

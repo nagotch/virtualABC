@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import db from '../db';
+import { dbGet, dbRun } from '../db';
 import {
   TRAQ_AUTH_URL,
   exchangeCodeForToken,
@@ -14,6 +14,8 @@ import { isAdmin } from '../admin';
 const CLIENT_ID     = process.env.TRAQ_CLIENT_ID ?? '';
 const CLIENT_SECRET = process.env.TRAQ_CLIENT_SECRET ?? '';
 const REDIRECT_URI  = process.env.TRAQ_REDIRECT_URI ?? 'http://localhost:3000/api/auth/callback';
+// 認証後の戻り先（フロントのURL）
+const APP_URL       = process.env.APP_URL ?? 'http://localhost:5173';
 
 // In-memory store for PKCE state (code_verifier + state)
 // Keyed by state value; entries are short-lived
@@ -73,8 +75,8 @@ app.get('/callback', async (c) => {
 
   // Create session
   const sessionId = generateState(); // reuse random generator
-  db.run(
-    'INSERT OR REPLACE INTO sessions (id, traq_id) VALUES (?, ?)',
+  await dbRun(
+    'REPLACE INTO sessions (id, traq_id) VALUES (?, ?)',
     [sessionId, me.name],
   );
 
@@ -84,23 +86,23 @@ app.get('/callback', async (c) => {
     maxAge: 60 * 60 * 24 * 7, // 1 week
   });
 
-  return c.redirect('http://localhost:5173/');
+  return c.redirect(`${APP_URL}/`);
 });
 
 // GET /api/auth/me → return current user
-app.get('/me', (c) => {
+app.get('/me', async (c) => {
   const sessionId = getCookie(c, 'session');
   if (!sessionId) return c.json({ user: null });
 
-  const row = db.query<{ traq_id: string }, [string]>(
-    'SELECT traq_id FROM sessions WHERE id = ?',
-  ).get(sessionId);
+  const row = await dbGet<{ traq_id: string }>(
+    'SELECT traq_id FROM sessions WHERE id = ?', [sessionId],
+  );
 
   if (!row) return c.json({ user: null });
 
-  const userRow = db.query<{ atcoder_id: string }, [string]>(
-    'SELECT atcoder_id FROM users WHERE traq_id = ?',
-  ).get(row.traq_id);
+  const userRow = await dbGet<{ atcoder_id: string }>(
+    'SELECT atcoder_id FROM users WHERE traq_id = ?', [row.traq_id],
+  );
 
   return c.json({
     user: {
@@ -112,10 +114,10 @@ app.get('/me', (c) => {
 });
 
 // POST /api/auth/logout
-app.post('/logout', (c) => {
+app.post('/logout', async (c) => {
   const sessionId = getCookie(c, 'session');
   if (sessionId) {
-    db.run('DELETE FROM sessions WHERE id = ?', [sessionId]);
+    await dbRun('DELETE FROM sessions WHERE id = ?', [sessionId]);
     deleteCookie(c, 'session');
   }
   return c.json({ ok: true });

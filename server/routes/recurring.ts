@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
-import db from '../db';
+import { dbAll, dbGet, dbRun } from '../db';
 import { COLORS, type ColorKey } from '../atcoder';
 import { randomId } from '../contests-core';
 import { scheduleTick } from '../scheduler';
@@ -8,11 +8,11 @@ import { isAdmin } from '../admin';
 
 const app = new Hono();
 
-const getTraqId = (sessionId: string | undefined): string | null => {
+const getTraqId = async (sessionId: string | undefined): Promise<string | null> => {
   if (!sessionId) return null;
-  const row = db.query<{ traq_id: string }, [string]>(
-    'SELECT traq_id FROM sessions WHERE id = ?',
-  ).get(sessionId);
+  const row = await dbGet<{ traq_id: string }>(
+    'SELECT traq_id FROM sessions WHERE id = ?', [sessionId],
+  );
   return row?.traq_id ?? null;
 };
 
@@ -49,17 +49,17 @@ type CreateBody = {
 };
 
 // GET /api/recurring → 設定一覧（新しい順）
-app.get('/', (c) => {
-  const rows = db.query<RecurringRow, []>(
-    `SELECT id, title, freq, weekday, hour, minute, duration_minutes, mode, count, color_spec, rated, enabled, created_by, created_at
+app.get('/', async (c) => {
+  const rows = await dbAll<RecurringRow>(
+    `SELECT id, title, freq, weekday, hour, minute, duration_minutes, mode, \`count\`, color_spec, rated, enabled, created_by, created_at
      FROM recurring_contests ORDER BY created_at DESC`,
-  ).all();
+  );
   return c.json({ recurring: rows });
 });
 
 // POST /api/recurring → 定期コンテスト設定を作成
 app.post('/', async (c) => {
-  const traqId = getTraqId(getCookie(c, 'session'));
+  const traqId = await getTraqId(getCookie(c, 'session'));
   if (!traqId) return c.json({ error: 'unauthorized' }, 401);
 
   let body: CreateBody;
@@ -116,9 +116,9 @@ app.post('/', async (c) => {
   // レート変動はadminのみ。非adminの指定は無視してfalse扱い。
   const rated = body.rated === true && isAdmin(traqId);
 
-  db.run(
+  await dbRun(
     `INSERT INTO recurring_contests
-       (id, title, freq, weekday, hour, minute, duration_minutes, mode, count, color_spec, rated, created_by)
+       (id, title, freq, weekday, hour, minute, duration_minutes, mode, \`count\`, color_spec, rated, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, title, body.freq, weekday, hour, minute, duration, body.mode, count, colorSpecJson, rated ? 1 : 0, traqId],
   );
@@ -131,13 +131,13 @@ app.post('/', async (c) => {
 
 // PATCH /api/recurring/:id → 有効/無効の切り替え（作成者のみ）
 app.patch('/:id', async (c) => {
-  const traqId = getTraqId(getCookie(c, 'session'));
+  const traqId = await getTraqId(getCookie(c, 'session'));
   if (!traqId) return c.json({ error: 'unauthorized' }, 401);
 
   const id = c.req.param('id');
-  const row = db.query<{ created_by: string }, [string]>(
-    'SELECT created_by FROM recurring_contests WHERE id = ?',
-  ).get(id);
+  const row = await dbGet<{ created_by: string }>(
+    'SELECT created_by FROM recurring_contests WHERE id = ?', [id],
+  );
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.created_by !== traqId) return c.json({ error: 'forbidden' }, 403);
 
@@ -149,24 +149,24 @@ app.patch('/:id', async (c) => {
   }
   if (typeof body.enabled !== 'boolean') return c.json({ error: 'invalid enabled' }, 400);
 
-  db.run('UPDATE recurring_contests SET enabled = ? WHERE id = ?', [body.enabled ? 1 : 0, id]);
+  await dbRun('UPDATE recurring_contests SET enabled = ? WHERE id = ?', [body.enabled ? 1 : 0, id]);
   if (body.enabled) void scheduleTick();
   return c.json({ ok: true });
 });
 
 // DELETE /api/recurring/:id → 設定削除（作成者のみ）。生成済みコンテストは残す。
-app.delete('/:id', (c) => {
-  const traqId = getTraqId(getCookie(c, 'session'));
+app.delete('/:id', async (c) => {
+  const traqId = await getTraqId(getCookie(c, 'session'));
   if (!traqId) return c.json({ error: 'unauthorized' }, 401);
 
   const id = c.req.param('id');
-  const row = db.query<{ created_by: string }, [string]>(
-    'SELECT created_by FROM recurring_contests WHERE id = ?',
-  ).get(id);
+  const row = await dbGet<{ created_by: string }>(
+    'SELECT created_by FROM recurring_contests WHERE id = ?', [id],
+  );
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.created_by !== traqId) return c.json({ error: 'forbidden' }, 403);
 
-  db.run('DELETE FROM recurring_contests WHERE id = ?', [id]);
+  await dbRun('DELETE FROM recurring_contests WHERE id = ?', [id]);
   return c.json({ ok: true });
 });
 
