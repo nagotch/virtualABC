@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         nagotch_virtual Submission Reporter
 // @namespace    http://tampermonkey.net/
-// @version      4.1
+// @version      4.2
 // @description  AtCoderの提出詳細ページで、開催中のnagotch_virtualコンテスト対象問題かつ「自分の提出」のときだけ報告ボタンを表示します。押すと提出結果を報告します（自動報告なし）。報告はあくまで予測順位用で、確定順位・確定レートはAtCoder Problemsの公式データから集計されます。
 // @author       traP
 // @homepageURL  https://github.com/nagotch/nagotch_virtual
@@ -9,6 +9,7 @@
 // @downloadURL  https://nagotch-virtual.trap.show/vabc-reporter.user.js
 // @updateURL    https://nagotch-virtual.trap.show/vabc-reporter.user.js
 // @match        https://atcoder.jp/contests/*/submissions/*
+// @match        https://nagotch-virtual.trap.show/*
 // @run-at       document-end
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
@@ -19,6 +20,15 @@
 
 (function () {
   'use strict';
+
+  const VERSION = '4.2';
+
+  // nagotch_virtual 本体のページでは、インストール済みを知らせるマーカーだけ立てて終了する。
+  // （アプリ側はこの属性を見て「インストールリンク」を隠す）
+  if (location.hostname === 'nagotch-virtual.trap.show') {
+    document.documentElement.setAttribute('data-nvr-installed', VERSION);
+    return;
+  }
 
   // ===== 設定 =====================================================
   // 既定の接続先（本番。Path Overlay でフロントとAPIが同一オリジン = APP_URL）。
