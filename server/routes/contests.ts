@@ -177,14 +177,18 @@ app.get('/:id', async (c) => {
     'SELECT traq_id, atcoder_id, rated FROM participants WHERE contest_id = ?', [id],
   );
 
-  // 問題一覧は「参加済み かつ 開催時間中」のときだけ返す（APIからの先読み防止）
+  // 問題一覧の表示条件:
+  // - 開始前(upcoming): 先読み防止のため非表示
+  // - 開催中(ongoing) : 参加者のみ表示（未参加者の先読み防止）
+  // - 終了後(finished): 隠す必要がないので誰でも表示（過去問として公開）
   const traqId = await getTraqId(getCookie(c, 'session'));
   const joined = !!traqId && participants.some((p) => p.traq_id === traqId);
   const now = Date.now();
   const start = contest.start_at ? new Date(contest.start_at).getTime() : null;
   const end = start !== null ? start + (contest.duration_minutes ?? 0) * 60_000 : null;
   const ongoing = start !== null && end !== null && now >= start && now < end;
-  const canViewProblems = joined && ongoing;
+  const finished = start === null || (end !== null && now >= end);
+  const canViewProblems = finished || (joined && ongoing);
 
   const problems = canViewProblems
     ? await dbAll<
@@ -269,23 +273,41 @@ app.get('/:id/standings', async (c) => {
   );
   if (!contest) return c.json({ error: 'not found' }, 404);
 
-  // AtCoder Problems のクロール反映は12〜24時間かかることがある。終了直後にapiのみ
-  // (official)へ切り替えると、まだ取り込めていない提出が抜けてスカスカに見える。
-  // そこで開催中〜終了後24時間は予測(api+script)を表示し、24時間経過後に確定(apiのみ)へ
-  // 切り替える（2段階通知のタイミングと揃える）。
-  const FINAL_DELAY_MS = 24 * 60 * 60 * 1000;
-  const startMs = contest.start_at ? new Date(contest.start_at).getTime() : null;
-  const endMs = startMs !== null ? startMs + (contest.duration_minutes ?? 0) * 60_000 : null;
-  const withinProvisional = endMs !== null && Date.now() < endMs + FINAL_DELAY_MS;
+  const mode = await resolveStandingsMode(id, contest.start_at, contest.duration_minutes);
+  const standings = await computeStandings(id, mode);
+  if (!standings) return c.json({ error: 'not found' }, 404);
+  return c.json(standings);
+});
 
-  let mode: StandingsMode = withinProvisional ? 'predicted' : 'official';
-  if (mode === 'official') {
-    const startUnix = contest.start_at ? Math.floor(new Date(contest.start_at).getTime() / 1000) : 0;
-    const endUnix = startUnix + (contest.duration_minutes ?? 0) * 60;
-    // 24時間経ってもapiが1件も無い場合（クロール大幅遅延）の保険として予測にフォールバック。
-    if (!(await hasApiSubmissions(id, startUnix, endUnix))) mode = 'predicted';
+// POST /api/contests/:id/recompute → 順位表・レートを再計算する。
+// AtCoder Problems API の不調などで自動ポーリングが取りこぼした場合に備え、
+// 窓（終了後25h）に関係なく確定提出(api)を「今すぐ」強制取得してから再集計する。
+// 集計に使うソースは resolveStandingsMode に従う:
+//   終了から24時間まで → script + api（予測）/ 24時間経過後 → api のみ（確定）。
+app.post('/:id/recompute', async (c) => {
+  const traqId = await getTraqId(getCookie(c, 'session'));
+  if (!traqId) return c.json({ error: 'unauthorized' }, 401);
+
+  const id = c.req.param('id');
+  const contest = await dbGet<{ start_at: string | null; duration_minutes: number | null }>(
+    'SELECT start_at, duration_minutes FROM contests WHERE id = ?', [id],
+  );
+  if (!contest) return c.json({ error: 'not found' }, 404);
+
+  const { upcoming } = timingOf(contest.start_at, contest.duration_minutes);
+  if (upcoming) return c.json({ error: 'コンテスト開始前です' }, 409);
+
+  // AtCoder Problems から最新の確定提出を強制取得（poller の窓外でも実行可能）。
+  // 動的importで poller との循環参照を避ける。取得失敗時も既存データで再集計を返す。
+  try {
+    const { repollContest } = await import('../poller');
+    await repollContest(id);
+  } catch (e) {
+    console.error('[recompute] repoll failed:', e);
   }
 
+  clearStandings(id);
+  const mode = await resolveStandingsMode(id, contest.start_at, contest.duration_minutes);
   const standings = await computeStandings(id, mode);
   if (!standings) return c.json({ error: 'not found' }, 404);
   return c.json(standings);
@@ -520,6 +542,25 @@ export const computeStandings = async (
   const data: Standings = { contest, problems, rows, predicted: mode === 'predicted' };
   standingsCache.set(cacheKey, { at: Date.now(), data });
   return data;
+};
+
+// 順位表・レート集計に使うソースを決める。
+// AtCoder Problems のクロール反映は12〜24時間かかることがあるため:
+//   終了から24時間まで → 'predicted'（script + api。終了直後でも順位がスカスカにならない）
+//   24時間経過後        → 'official'（api のみ＝確定）
+// ただし24時間経ってもapiが1件も無い場合（クロール大幅遅延）は予測へフォールバック。
+const PROVISIONAL_WINDOW_MS = 24 * 60 * 60 * 1000;
+const resolveStandingsMode = async (
+  contestId: string,
+  startAt: string | null,
+  durationMinutes: number | null,
+): Promise<StandingsMode> => {
+  const startMs = startAt ? new Date(startAt).getTime() : null;
+  const endMs = startMs !== null ? startMs + (durationMinutes ?? 0) * 60_000 : null;
+  if (endMs === null || Date.now() < endMs + PROVISIONAL_WINDOW_MS) return 'predicted';
+  const startUnix = Math.floor((startMs as number) / 1000);
+  const endUnix = startUnix + (durationMinutes ?? 0) * 60;
+  return (await hasApiSubmissions(contestId, startUnix, endUnix)) ? 'official' : 'predicted';
 };
 
 // 指定コンテストに AtCoder Problems 由来(source='api')の提出が取り込まれているか。
