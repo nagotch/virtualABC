@@ -33,13 +33,21 @@ app.post('/register', async (c) => {
 
 // GET /api/users/rating → ログイン中ユーザーの nagotch_virtual 独自レーティング
 // 参加して終了したコンテストの perf 履歴から算出する（AtCoderの実レートは使わない）。
+//
+// rating(確定): AtCoder Problems API 由来(source='api')の提出のみで算出。不正不可。
+// predictedRating(予測): ユーザースクリプト報告も含めて算出。AtCoder反映前の暫定値。
 app.get('/rating', async (c) => {
   const traqId = await getTraqId(getCookie(c, 'session'));
   if (!traqId) return c.json({ error: 'unauthorized' }, 401);
 
-  const perfs = await getUserPerfHistory(traqId); // 最新が先頭
-  const rating = computeRating(perfs);
-  return c.json({ rating, contests: perfs.length });
+  const officialPerfs  = await getUserPerfHistory(traqId, 'official');  // 最新が先頭
+  const predictedPerfs = await getUserPerfHistory(traqId, 'predicted');
+  return c.json({
+    rating:            computeRating(officialPerfs),
+    contests:          officialPerfs.length,
+    predictedRating:   computeRating(predictedPerfs),
+    predictedContests: predictedPerfs.length,
+  });
 });
 
 export default app;

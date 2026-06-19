@@ -54,10 +54,12 @@ export const pollOnce = async (): Promise<void> => {
         for (const s of subs) {
           if (s.epoch_second > endUnix) continue;
           if (!problemIds.has(s.problem_id)) continue;
+          // AtCoder Problems 由来は信頼できる確定データ。
+          // REPLACE で source='api' を書き込み、スクリプト報告(予測)を常に上書きする。
           await dbRun(
             `REPLACE INTO reported_submissions
-               (submission_id, atcoder_id, problem_id, result, epoch_second)
-             VALUES (?, ?, ?, ?, ?)`,
+               (submission_id, atcoder_id, problem_id, result, epoch_second, source)
+             VALUES (?, ?, ?, ?, ?, 'api')`,
             [s.id, part.atcoder_id, s.problem_id, s.result, s.epoch_second],
           );
           changed++;

@@ -12,8 +12,10 @@ export type User = {
 };
 
 export type RatingInfo = {
-  rating: number | null; // nagotch_virtual 独自レート
-  contests: number;      // レート算出に使った（終了済み参加）コンテスト数
+  rating: number | null;          // 確定レート（AtCoder Problems由来のみ）
+  contests: number;               // 確定レート算出に使ったコンテスト数
+  predictedRating: number | null; // 予測レート（スクリプト報告も含む暫定値）
+  predictedContests: number;      // 予測レート算出に使ったコンテスト数
 };
 
 export type ColorKey =
@@ -55,6 +57,7 @@ export type Standings = {
   contest: { id: string; title: string; start_at: string | null; duration_minutes: number | null };
   problems: { problem_id: string; problem_index: string; points: number; difficulty: number | null }[];
   rows: StandingRow[];
+  predicted: boolean; // true=予測(スクリプト報告含む) / false=確定(AtCoder Problems由来)
 };
 
 export type ContestMode = 'random' | 'color' | 'manual';

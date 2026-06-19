@@ -43,11 +43,34 @@ export default function MyPage({
 
   const renderRating = () => {
     if (!rating) return <span className="badge unset">確認中...</span>;
-    if (rating.rating === null) return <span className="badge unset">未参加（レート無し）</span>;
+
+    // 予測レートが確定と異なるとき（AtCoder反映待ちの暫定値があるとき）だけ併記する。
+    const showPredicted =
+      rating.predictedRating !== null &&
+      (rating.predictedRating !== rating.rating || rating.predictedContests !== rating.contests);
+    const predictedNote = showPredicted && (
+      <div className="rating-sub" style={{ marginTop: 4 }}>
+        予測:{' '}
+        <span style={{ color: ratingColor(rating.predictedRating as number), fontWeight: 700 }}>
+          {rating.predictedRating}
+        </span>{' '}
+        （{rating.predictedContests}回・AtCoder反映待ち）
+      </div>
+    );
+
+    if (rating.rating === null) {
+      return (
+        <span className="value">
+          <span className="badge unset">未確定（レート無し）</span>
+          {predictedNote}
+        </span>
+      );
+    }
     return (
       <span className="value" style={{ color: ratingColor(rating.rating) }}>
         {rating.rating}
         <span className="rating-sub"> （{rating.contests}回）</span>
+        {predictedNote}
       </span>
     );
   };
@@ -115,7 +138,11 @@ export default function MyPage({
           <h2 className="section-title">📝 リアルタイム順位表の使い方</h2>
           <p className="hint">
             ユーザースクリプト(Tampermonkey)を入れると、開催中コンテストの問題の<strong>提出詳細ページ</strong>に
-            「nagotch_virtualに報告」ボタンが表示されます。押すと結果が順位表に反映されます（設定不要・ログイン中のAtCoder IDを自動取得）。
+            「nagotch_virtualに報告」ボタンが表示されます。押すと結果が<strong>予測順位</strong>に即時反映されます（設定不要・ログイン中のAtCoder IDを自動取得）。
+          </p>
+          <p className="hint">
+            ※ スクリプト報告はあくまで<strong>予測</strong>です。<strong>確定順位・確定レート</strong>はコンテスト終了後に
+            AtCoder Problems の公式データで集計し直されるため、報告を偽っても確定結果には反映されません。
           </p>
         </div>
       )}

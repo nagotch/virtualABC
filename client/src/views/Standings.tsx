@@ -46,8 +46,19 @@ export default function Standings({ contestId }: { contestId: string }) {
         </button>
       </div>
 
+      {data.predicted ? (
+        <p className="hint" style={{ marginBottom: 12, color: 'var(--warn, #c77)' }}>
+          🔴 <strong>予測順位</strong>です。ユーザースクリプトの報告に基づく暫定値で、確定ではありません。
+          コンテスト終了後に AtCoder Problems のデータで集計し直され、<strong>確定順位</strong>に切り替わります。
+        </p>
+      ) : (
+        <p className="hint" style={{ marginBottom: 12 }}>
+          ✅ <strong>確定順位</strong>です（AtCoder Problems のデータに基づく集計）。
+        </p>
+      )}
+
       <p className="hint" style={{ marginBottom: 12 }}>
-        ※ 提出詳細ページでユーザースクリプトの「報告」ボタンを押すと反映されます。反映されない場合は「更新」を押してください。
+        ※ 提出詳細ページでユーザースクリプトの「報告」ボタンを押すと予測順位に即時反映されます。反映されない場合は「更新」を押してください。
       </p>
 
       {data.rows.length === 0 ? (

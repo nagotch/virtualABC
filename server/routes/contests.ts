@@ -234,7 +234,7 @@ app.post('/:id/join', async (c) => {
     'REPLACE INTO participants (contest_id, traq_id, atcoder_id, rated) VALUES (?, ?, ?, ?)',
     [id, traqId, user.atcoder_id, rated],
   );
-  standingsCache.delete(id);
+  clearStandings(id);
   return c.json({ ok: true, rated: rated === 1 });
 });
 
@@ -253,14 +253,30 @@ app.post('/:id/leave', async (c) => {
   if (ongoing) return c.json({ error: 'コンテスト中は参加を取り消せません' }, 409);
 
   await dbRun('DELETE FROM participants WHERE contest_id = ? AND traq_id = ?', [id, traqId]);
-  standingsCache.delete(id);
+  clearStandings(id);
   return c.json({ ok: true });
 });
 
-// GET /api/contests/:id/standings → 順位表（開催時間内の提出で集計）
+// GET /api/contests/:id/standings → 順位表
+// 開催中: AtCoder Problems は未クロールのため、スクリプト報告を含む「予測順位」を返す。
+// 終了後: AtCoder Problems API 由来(source='api')のみの「確定順位」を返す。
+//         ただし終了直後でAPIが未取り込みの間は予測にフォールバックする。
 app.get('/:id/standings', async (c) => {
   const id = c.req.param('id');
-  const standings = await computeStandings(id);
+  const contest = await dbGet<{ start_at: string | null; duration_minutes: number | null }>(
+    'SELECT start_at, duration_minutes FROM contests WHERE id = ?', [id],
+  );
+  if (!contest) return c.json({ error: 'not found' }, 404);
+
+  const { ongoing } = timingOf(contest.start_at, contest.duration_minutes);
+  let mode: StandingsMode = ongoing ? 'predicted' : 'official';
+  if (mode === 'official') {
+    const startUnix = contest.start_at ? Math.floor(new Date(contest.start_at).getTime() / 1000) : 0;
+    const endUnix = startUnix + (contest.duration_minutes ?? 0) * 60;
+    if (!(await hasApiSubmissions(id, startUnix, endUnix))) mode = 'predicted';
+  }
+
+  const standings = await computeStandings(id, mode);
   if (!standings) return c.json({ error: 'not found' }, 404);
   return c.json(standings);
 });
@@ -347,25 +363,42 @@ type Standings = {
   contest: { id: string; title: string; start_at: string | null; duration_minutes: number | null };
   problems: { problem_id: string; problem_index: string; points: number; difficulty: number | null }[];
   rows: StandingRow[];
+  predicted: boolean;       // true=予測(スクリプト報告含む) / false=確定(AtCoder Problems由来のみ)
 };
 
 type ReportedSub = { submission_id: number; problem_id: string; result: string; epoch_second: number };
 
+// 順位表の集計対象データソース:
+// - 'official'  : AtCoder Problems API 由来(source='api')のみ。確定・不正不可。
+// - 'predicted' : スクリプト報告(source='script')も含む。開催中のリアルタイム表示用＝予測。
+type StandingsMode = 'official' | 'predicted';
+
 // 報告された提出はDBから即時に読めるのでキャッシュは不要だが、
 // 提出報告時にキャッシュを無効化するための仕組みは維持する。
+// キーは `${contestId}:${mode}`（official/predictedで別キャッシュ）。
 const standingsCache = new Map<string, { at: number; data: Standings }>();
 const STANDINGS_TTL = 5 * 1000;
+
+// 指定コンテストの順位表キャッシュ（official/predicted両方）を破棄
+const clearStandings = (contestId: string): void => {
+  standingsCache.delete(`${contestId}:official`);
+  standingsCache.delete(`${contestId}:predicted`);
+};
 
 // あるAtCoder IDが参加するコンテストの順位表キャッシュを無効化
 export const invalidateStandingsForAtcoder = async (atcoderId: string): Promise<void> => {
   const contestIds = await dbAll<{ contest_id: string }>(
     'SELECT contest_id FROM participants WHERE atcoder_id = ?', [atcoderId],
   );
-  for (const { contest_id } of contestIds) standingsCache.delete(contest_id);
+  for (const { contest_id } of contestIds) clearStandings(contest_id);
 };
 
-const computeStandings = async (contestId: string): Promise<Standings | null> => {
-  const cached = standingsCache.get(contestId);
+const computeStandings = async (
+  contestId: string,
+  mode: StandingsMode,
+): Promise<Standings | null> => {
+  const cacheKey = `${contestId}:${mode}`;
+  const cached = standingsCache.get(cacheKey);
   if (cached && Date.now() - cached.at < STANDINGS_TTL) return cached.data;
 
   const contest = await dbGet<
@@ -388,13 +421,17 @@ const computeStandings = async (contestId: string): Promise<Standings | null> =>
   const problemIds = new Set(problems.map((p) => p.problem_id));
   const pointsOf = new Map(problems.map((p) => [p.problem_id, p.points]));
 
+  // official モードは AtCoder Problems 由来(source='api')のみを参照し、
+  // スクリプト報告(予測・不正可能)を除外する。
+  const sourceClause = mode === 'official' ? "AND source = 'api'" : '';
+
   const rows: StandingRow[] = [];
   for (const part of participants) {
     // 同一秒の提出が複数あっても順序が定まるよう、時刻→提出IDの昇順で取得。
     // 各問題で先頭から最初のACを採用する＝一番早い提出を参照する。
     const subs = (await dbAll<ReportedSub>(
       `SELECT submission_id, problem_id, result, epoch_second FROM reported_submissions
-       WHERE atcoder_id = ? AND epoch_second BETWEEN ? AND ?
+       WHERE atcoder_id = ? AND epoch_second BETWEEN ? AND ? ${sourceClause}
        ORDER BY epoch_second ASC, submission_id ASC`,
       [part.atcoder_id, startUnix, endUnix],
     )).filter((s) => problemIds.has(s.problem_id));
@@ -467,14 +504,35 @@ const computeStandings = async (contestId: string): Promise<Standings | null> =>
     prev = { score: r.score, pen: r.penaltySeconds };
   });
 
-  const data: Standings = { contest, problems, rows };
-  standingsCache.set(contestId, { at: Date.now(), data });
+  const data: Standings = { contest, problems, rows, predicted: mode === 'predicted' };
+  standingsCache.set(cacheKey, { at: Date.now(), data });
   return data;
+};
+
+// 指定コンテストに AtCoder Problems 由来(source='api')の提出が取り込まれているか。
+// 終了直後でAPIがまだクロールしていない場合は false（→予測表示にフォールバック）。
+const hasApiSubmissions = async (
+  contestId: string,
+  startUnix: number,
+  endUnix: number,
+): Promise<boolean> => {
+  const row = await dbGet<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM reported_submissions r
+       JOIN participants p ON p.atcoder_id = r.atcoder_id AND p.contest_id = ?
+      WHERE r.source = 'api' AND r.epoch_second BETWEEN ? AND ?`,
+    [contestId, startUnix, endUnix],
+  );
+  return (row?.n ?? 0) > 0;
 };
 
 // 指定ユーザーが参加して「終了済み」コンテストの perf 履歴を返す（最新が先頭）。
 // 0完(perfがnull)のコンテストは perf=0 として扱う。レーティング算出に使う。
-export const getUserPerfHistory = async (traqId: string): Promise<number[]> => {
+// mode='official' は AtCoder Problems 由来(source='api')のみで集計＝確定レート用。
+// mode='predicted' はスクリプト報告も含む＝予測レート用。
+export const getUserPerfHistory = async (
+  traqId: string,
+  mode: StandingsMode,
+): Promise<number[]> => {
   const now = Date.now();
   const contests = await dbAll<
     { id: string; start_at: string | null; duration_minutes: number | null }
@@ -490,7 +548,7 @@ export const getUserPerfHistory = async (traqId: string): Promise<number[]> => {
     if (!c.start_at) continue;
     const end = new Date(c.start_at).getTime() + (c.duration_minutes ?? 0) * 60_000;
     if (now < end) continue; // 終了していないコンテストはレートに含めない
-    const st = await computeStandings(c.id);
+    const st = await computeStandings(c.id, mode);
     const row = st?.rows.find((r) => r.traqId === traqId);
     if (!row) continue;
     perfs.push(row.perf ?? 0);

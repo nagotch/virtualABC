@@ -136,9 +136,18 @@ export async function initDb(): Promise<void> {
       problem_id    VARCHAR(64) NOT NULL,
       result        VARCHAR(16) NOT NULL,            -- AC, WA, ...
       epoch_second  BIGINT NOT NULL,                 -- 提出時刻(unix)
+      source        VARCHAR(8) NOT NULL DEFAULT 'script', -- 'api'(信頼) | 'script'(予測用)
       reported_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_reported_atcoder (atcoder_id, epoch_second)
     )
+  `);
+
+  // 既存DB（source列が無い旧スキーマ）へのマイグレーション。
+  // 既存行はソース不明のため、信頼できない 'script' 扱いにする（不正対策）。
+  // 'api'(AtCoder Problems由来) はポーラーが再取得した時点で上書きされる。
+  await dbRun(`
+    ALTER TABLE reported_submissions
+      ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'script'
   `);
 }
 
