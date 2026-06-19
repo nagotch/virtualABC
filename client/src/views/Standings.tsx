@@ -5,7 +5,7 @@ const TRAQ_ICON = (name: string) =>
   `https://q.trap.jp/api/v3/public/icon/${encodeURIComponent(name)}`;
 
 // 終了後この時間までは「暫定順位」と表示する（AtCoder Problems への反映待ちを見込む）。
-const PROVISIONAL_LABEL_MS = 48 * 60 * 60 * 1000;
+const PROVISIONAL_LABEL_MS = 24 * 60 * 60 * 1000;
 
 export default function Standings({ contestId }: { contestId: string }) {
   const [data, setData] = useState<StandingsData | null>(null);
@@ -75,7 +75,7 @@ export default function Standings({ contestId }: { contestId: string }) {
 
       {isProvisional ? (
         <p className="hint" style={{ marginBottom: 12, color: 'var(--warn, #c77)' }}>
-          🔴 <strong>暫定順位</strong>です。AtCoder Problems への反映に時間がかかるため（最大48時間ほど）、
+          🔴 <strong>暫定順位</strong>です。AtCoder Problems への反映に時間がかかるため（最大24時間ほど）、
           確定ではありません。反映後に <strong>確定順位</strong> へ切り替わります。
           AtCoder Problems の不調などで反映が遅い場合は「ratingを再計算」を押すと取り込み直せます。
         </p>
