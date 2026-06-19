@@ -4,7 +4,7 @@ import { setActiveContest } from '../activeContest';
 import DifficultyCircle from '../components/DifficultyCircle';
 import Standings from './Standings';
 
-export default function ContestDetail({ id, meId }: { id: string; meId: string }) {
+export default function ContestDetail({ id, meId, isAdmin }: { id: string; meId: string; isAdmin: boolean }) {
   const [data, setData] = useState<Detail | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -192,7 +192,7 @@ export default function ContestDetail({ id, meId }: { id: string; meId: string }
         </div>
 
         <div className="detail-right">
-          <Standings key={standingsKey} contestId={id} />
+          <Standings key={standingsKey} contestId={id} isAdmin={isAdmin} />
         </div>
       </div>
 
