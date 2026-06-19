@@ -6,6 +6,7 @@ import ContestList from './views/ContestList';
 import CreateContest from './views/CreateContest';
 import ContestDetail from './views/ContestDetail';
 import RecurringContests from './views/RecurringContests';
+import Ranking from './views/Ranking';
 import ClockWidget from './components/ClockWidget';
 import { useUserscriptInstalled } from './useUserscriptInstalled';
 
@@ -67,6 +68,7 @@ function App() {
     if (path === '/contests') return <ContestList />;
     if (path === '/contests/new') return <CreateContest user={user} />;
     if (path === '/recurring') return <RecurringContests user={user} />;
+    if (path === '/ranking') return <Ranking />;
     const m = path.match(/^\/contests\/(.+)$/);
     if (m) return <ContestDetail id={m[1]} meId={user.traqId} />;
     return <MyPage user={user} onUserChange={setUser} onLogout={handleLogout} />;
@@ -97,6 +99,7 @@ function App() {
           <nav className="nav">
             {navLink('#/contests', 'コンテスト')}
             {navLink('#/recurring', '定期開催')}
+            {navLink('#/ranking', 'ランキング')}
             {!scriptInstalled && (
               <a
                 className="nav-link"

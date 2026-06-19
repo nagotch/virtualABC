@@ -6,6 +6,7 @@ import usersRoutes from './routes/users';
 import contestsRoutes from './routes/contests';
 import submissionsRoutes from './routes/submissions';
 import recurringRoutes from './routes/recurring';
+import rankingRoutes from './routes/ranking';
 import { startPoller } from './poller';
 import { startScheduler } from './scheduler';
 
@@ -25,6 +26,7 @@ app.route('/api/users',       usersRoutes);
 app.route('/api/contests',    contestsRoutes);
 app.route('/api/submissions', submissionsRoutes);
 app.route('/api/recurring',   recurringRoutes);
+app.route('/api/ranking',     rankingRoutes);
 
 app.get('/api/health', (c) => c.json({ status: 'ok' }));
 

@@ -557,6 +557,46 @@ export const getUserPerfHistory = async (
   return perfs;
 };
 
+// 全ユーザーのレートランキング1行。
+export type RankingRow = {
+  rank: number;
+  traqId: string;
+  atcoderId: string;
+  rating: number;     // 確定レート（Rated参加なしは0）
+  contests: number;   // レート算出に使った確定コンテスト数
+};
+
+// 登録済み全ユーザーの確定レートを降順に並べたランキングを返す。
+// レートは official(source='api') のperf履歴から算出。Rated参加なしは0扱い。
+export const getRanking = async (): Promise<RankingRow[]> => {
+  const users = await dbAll<{ traq_id: string; atcoder_id: string }>(
+    'SELECT traq_id, atcoder_id FROM users',
+  );
+
+  const rows: RankingRow[] = [];
+  for (const u of users) {
+    const perfs = await getUserPerfHistory(u.traq_id, 'official');
+    rows.push({
+      rank: 0,
+      traqId: u.traq_id,
+      atcoderId: u.atcoder_id,
+      rating: computeRating(perfs) ?? 0,
+      contests: perfs.length,
+    });
+  }
+
+  // レート降順。同レートは同順位。
+  rows.sort((a, b) => b.rating - a.rating);
+  let rank = 0;
+  let prev: number | null = null;
+  rows.forEach((r, i) => {
+    if (prev === null || r.rating !== prev) rank = i + 1;
+    r.rank = rank;
+    prev = r.rating;
+  });
+  return rows;
+};
+
 // プロフィール用のコンテスト成績1行（グラフ・成績表で共用）。
 export type ContestHistoryRow = {
   contestId: string;

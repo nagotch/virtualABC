@@ -28,6 +28,15 @@ export type RatingHistoryPoint = {
   rating: number;   // そのコンテスト終了時点での累積レート
 };
 
+// 全ユーザーのレートランキング1行。
+export type RankingRow = {
+  rank: number;
+  traqId: string;
+  atcoderId: string;
+  rating: number;
+  contests: number;
+};
+
 // プロフィールのコンテスト成績1行（グラフ・成績表で共用）。
 export type ContestHistoryRow = {
   contestId: string;
@@ -234,6 +243,12 @@ export const api = {
     if (!res.ok) return [];
     const { history } = await res.json() as { history: ContestHistoryRow[] };
     return history;
+  },
+  async ranking(): Promise<RankingRow[]> {
+    const res = await fetch(`${API}/api/ranking`, { credentials: 'include' });
+    if (!res.ok) return [];
+    const { ranking } = await res.json() as { ranking: RankingRow[] };
+    return ranking;
   },
   async setMention(allow: boolean): Promise<boolean> {
     const res = await fetch(`${API}/api/users/mention`, {
