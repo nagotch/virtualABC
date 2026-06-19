@@ -11,6 +11,7 @@ import {
 } from '../atcoder';
 import { createContest } from '../contests-core';
 import { isAdmin } from '../admin';
+import { computeRating } from '../rating';
 
 const app = new Hono();
 
@@ -554,6 +555,50 @@ export const getUserPerfHistory = async (
     perfs.push(row.perf ?? 0);
   }
   return perfs;
+};
+
+// レート推移グラフ用の1点。
+export type RatingHistoryPoint = {
+  contestId: string;
+  title: string;
+  date: string;     // ISO8601（コンテスト開始日時）
+  perf: number;     // そのコンテストのパフォーマンス（0完は0）
+  rating: number;   // そのコンテスト終了時点での累積レート
+};
+
+// Rated参加かつ終了済みのコンテストを「古い順」に並べ、各時点の perf と
+// 累積レートを返す。AtCoder同様のレート推移グラフ用。
+// mode='official' は AtCoder Problems 由来(source='api')のみ＝確定。
+export const getUserRatingHistory = async (
+  traqId: string,
+  mode: StandingsMode,
+): Promise<RatingHistoryPoint[]> => {
+  const now = Date.now();
+  const contests = await dbAll<
+    { id: string; title: string; start_at: string | null; duration_minutes: number | null }
+  >(`
+    SELECT c.id, c.title, c.start_at, c.duration_minutes
+    FROM contests c JOIN participants p ON p.contest_id = c.id
+    WHERE p.traq_id = ? AND c.rated = 1 AND p.rated = 1
+    ORDER BY c.start_at ASC
+  `, [traqId]);
+
+  const points: RatingHistoryPoint[] = [];
+  const chronoPerfs: number[] = []; // 古い→新しい
+  for (const c of contests) {
+    if (!c.start_at) continue;
+    const end = new Date(c.start_at).getTime() + (c.duration_minutes ?? 0) * 60_000;
+    if (now < end) continue;
+    const st = await computeStandings(c.id, mode);
+    const row = st?.rows.find((r) => r.traqId === traqId);
+    if (!row) continue;
+    const perf = row.perf ?? 0;
+    chronoPerfs.push(perf);
+    // computeRating は「最新が先頭」を期待するため、現時点までを逆順に渡す。
+    const rating = computeRating([...chronoPerfs].reverse()) ?? 0;
+    points.push({ contestId: c.id, title: c.title, date: c.start_at, perf, rating });
+  }
+  return points;
 };
 
 export default app;

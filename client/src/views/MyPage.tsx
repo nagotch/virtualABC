@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api, ratingColor, type RatingInfo, type User } from '../api';
+import { api, ratingColor, type RatingHistoryPoint, type RatingInfo, type User } from '../api';
+import RatingChart from './RatingChart';
 
 const TRAQ_ICON = (name: string) =>
   `https://q.trap.jp/api/v3/public/icon/${encodeURIComponent(name)}`;
@@ -16,10 +17,13 @@ export default function MyPage({
   const [atcoderId, setAtcoderId] = useState('');
   const [message, setMessage] = useState('');
   const [rating, setRating] = useState<RatingInfo | null>(null);
+  const [history, setHistory] = useState<RatingHistoryPoint[] | null>(null);
   const [editing, setEditing] = useState(false);
 
   const loadRating = async () => {
-    setRating(await api.rating());
+    const [r, h] = await Promise.all([api.rating(), api.ratingHistory()]);
+    setRating(r);
+    setHistory(h);
   };
 
   useEffect(() => {
@@ -105,6 +109,14 @@ export default function MyPage({
         <div className="field">
           <span className="label">レート（独自）</span>
           {renderRating()}
+        </div>
+      )}
+
+      {registered && history !== null && history.length > 0 && (
+        <div className="token-section">
+          <h2 className="section-title">📈 レート推移</h2>
+          <p className="hint">Rated参加した確定済みコンテストのみ。レートとperfを切り替えて表示できます。</p>
+          <RatingChart history={history} />
         </div>
       )}
 

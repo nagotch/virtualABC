@@ -18,6 +18,14 @@ export type RatingInfo = {
   predictedContests: number;      // 予測レート算出に使ったコンテスト数
 };
 
+export type RatingHistoryPoint = {
+  contestId: string;
+  title: string;
+  date: string;     // ISO8601（コンテスト開始日時）
+  perf: number;     // そのコンテストのパフォーマンス
+  rating: number;   // そのコンテスト終了時点での累積レート
+};
+
 export type ColorKey =
   | 'grey' | 'brown' | 'green' | 'cyan'
   | 'blue' | 'yellow' | 'orange' | 'red';
@@ -151,6 +159,9 @@ export const ratingColor = (value: number): string => {
   return isDark() ? b.dark : b.light;
 };
 
+// レート帯の下限値（グラフ背景の色帯・目盛り用）: [0,400,...,2800]
+export const RATING_BAND_MINS: number[] = BANDS.map((b) => b.min);
+
 // ISO日時をJST表記に
 export const fmtDateTime = (iso: string | null): string => {
   if (!iso) return '日時未設定';
@@ -202,6 +213,12 @@ export const api = {
     const res = await fetch(`${API}/api/users/rating`, { credentials: 'include' });
     if (!res.ok) return null;
     return res.json() as Promise<RatingInfo>;
+  },
+  async ratingHistory(): Promise<RatingHistoryPoint[]> {
+    const res = await fetch(`${API}/api/users/rating-history`, { credentials: 'include' });
+    if (!res.ok) return [];
+    const { history } = await res.json() as { history: RatingHistoryPoint[] };
+    return history;
   },
   async register(atcoderId: string): Promise<boolean> {
     const res = await fetch(`${API}/api/users/register`, {
