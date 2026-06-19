@@ -48,6 +48,12 @@ export default function MyPage({
       .reverse();
   }, [history]);
 
+  const handleMentionToggle = async (allow: boolean) => {
+    if (await api.setMention(allow)) {
+      onUserChange({ ...user, allowMention: allow });
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (await api.register(atcoderId)) {
@@ -142,6 +148,17 @@ export default function MyPage({
                   <span className="label">レート（独自）</span>
                   {renderRating()}
                 </div>
+              )}
+
+              {registered && (
+                <label className="checkbox-row" style={{ marginTop: 14 }}>
+                  <input
+                    type="checkbox"
+                    checked={user.allowMention}
+                    onChange={(e) => handleMentionToggle(e.target.checked)}
+                  />
+                  コンテスト開始前リマインドで @メンションを許可する
+                </label>
               )}
 
               {(!registered || editing) && (

@@ -9,6 +9,7 @@ export type User = {
   traqId: string;
   atcoderId: string | null;
   isAdmin: boolean;
+  allowMention: boolean; // リマインドで@メンションを許可するか
 };
 
 export type RatingInfo = {
@@ -233,6 +234,15 @@ export const api = {
     if (!res.ok) return [];
     const { history } = await res.json() as { history: ContestHistoryRow[] };
     return history;
+  },
+  async setMention(allow: boolean): Promise<boolean> {
+    const res = await fetch(`${API}/api/users/mention`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allow }),
+    });
+    return res.ok;
   },
   async register(atcoderId: string): Promise<boolean> {
     const res = await fetch(`${API}/api/users/register`, {

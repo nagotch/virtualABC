@@ -100,15 +100,16 @@ app.get('/me', async (c) => {
 
   if (!row) return c.json({ user: null });
 
-  const userRow = await dbGet<{ atcoder_id: string }>(
-    'SELECT atcoder_id FROM users WHERE traq_id = ?', [row.traq_id],
+  const userRow = await dbGet<{ atcoder_id: string; allow_mention: number }>(
+    'SELECT atcoder_id, allow_mention FROM users WHERE traq_id = ?', [row.traq_id],
   );
 
   return c.json({
     user: {
-      traqId:    row.traq_id,
-      atcoderId: userRow?.atcoder_id ?? null,
-      isAdmin:   isAdmin(row.traq_id),
+      traqId:       row.traq_id,
+      atcoderId:    userRow?.atcoder_id ?? null,
+      isAdmin:      isAdmin(row.traq_id),
+      allowMention: (userRow?.allow_mention ?? 0) === 1,
     },
   });
 });

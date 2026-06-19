@@ -56,9 +56,10 @@ export async function dbTx<T>(fn: (conn: PoolConnection) => Promise<T>): Promise
 export async function initDb(): Promise<void> {
   await dbRun(`
     CREATE TABLE IF NOT EXISTS users (
-      traq_id    VARCHAR(64) PRIMARY KEY,
-      atcoder_id VARCHAR(64) NOT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      traq_id       VARCHAR(64) PRIMARY KEY,
+      atcoder_id    VARCHAR(64) NOT NULL,
+      allow_mention TINYINT NOT NULL DEFAULT 0,       -- リマインドで@メンションを許可するか
+      created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
@@ -73,7 +74,8 @@ export async function initDb(): Promise<void> {
       duration_minutes INT,
       recurring_id     VARCHAR(32),                   -- 定期生成元の設定ID
       rated            TINYINT NOT NULL DEFAULT 1,    -- レート変動（adminのみ1可）
-      standings_notified TINYINT NOT NULL DEFAULT 0   -- 終了後の順位表通知済みフラグ
+      standings_notified TINYINT NOT NULL DEFAULT 0,  -- 終了後の順位表通知済みフラグ
+      reminder_sent    TINYINT NOT NULL DEFAULT 0     -- 開始前リマインド送信済みフラグ
     )
   `);
 
@@ -172,6 +174,37 @@ export async function initDb(): Promise<void> {
       const end = r.start_at ? new Date(r.start_at).getTime() + (r.duration_minutes ?? 0) * 60_000 : 0;
       if (!r.start_at || now >= end) {
         await dbRun('UPDATE contests SET standings_notified = 1 WHERE id = ?', [r.id]);
+      }
+    }
+  }
+
+  // users に @メンション許可フラグを追加（既存DB移行。既定0でOK）。
+  await dbRun(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS allow_mention TINYINT NOT NULL DEFAULT 0
+  `);
+
+  // contests に開始前リマインド送信済みフラグを追加（既存DB移行）。
+  // 初回追加時のみ、既に開始済みのコンテストは送信済み扱いにして、
+  // デプロイ直後に開始前リマインドが過去分へ飛ぶのを防ぐ。
+  const hasReminderCol = await dbGet<{ x: number }>(
+    `SELECT 1 AS x FROM information_schema.columns
+      WHERE table_schema = DATABASE() AND table_name = 'contests'
+        AND column_name = 'reminder_sent'`,
+  );
+  await dbRun(`
+    ALTER TABLE contests
+      ADD COLUMN IF NOT EXISTS reminder_sent TINYINT NOT NULL DEFAULT 0
+  `);
+  if (!hasReminderCol) {
+    const rows = await dbAll<{ id: string; start_at: string | null }>(
+      'SELECT id, start_at FROM contests',
+    );
+    const now = Date.now();
+    for (const r of rows) {
+      const start = r.start_at ? new Date(r.start_at).getTime() : 0;
+      if (!r.start_at || now >= start) {
+        await dbRun('UPDATE contests SET reminder_sent = 1 WHERE id = ?', [r.id]);
       }
     }
   }
