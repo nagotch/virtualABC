@@ -212,7 +212,18 @@ export default function MyPage({
               <h2 className="section-title">📝 リアルタイム順位表の使い方</h2>
               <p className="hint">
                 ユーザースクリプト(Tampermonkey)を入れると、開催中コンテストの問題の<strong>提出詳細ページ</strong>に
-                「nagotch_virtualに報告」ボタンが表示されます。押すと結果が<strong>予測順位</strong>に即時反映されます（設定不要・ログイン中のAtCoder IDを自動取得）。
+                「nagotch_virtualに報告」ボタンが表示されます。押すと結果が<strong>予測順位</strong>に即時反映されます（自分の提出のみ報告可）。
+              </p>
+              <p className="hint">
+                <a
+                  className="pt-link"
+                  href="https://nagotch-virtual.trap.show/vabc-reporter.user.js"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  ▶ ユーザースクリプトをインストール
+                </a>
+                （Tampermonkey導入後にクリック）。接続先は拡張メニューから設定できます。
               </p>
               <p className="hint">
                 ※ スクリプト報告はあくまで<strong>予測</strong>です。<strong>確定順位・確定レート</strong>はコンテスト終了後に

@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# ビルド時に userscript/ からコピーされる配信用ファイル（単一ソース管理のため追跡しない）
+public/vabc-reporter.user.js
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

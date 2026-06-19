@@ -1,9 +1,13 @@
 // ==UserScript==
 // @name         nagotch_virtual Submission Reporter
 // @namespace    http://tampermonkey.net/
-// @version      4.0
+// @version      4.1
 // @description  AtCoderの提出詳細ページで、開催中のnagotch_virtualコンテスト対象問題かつ「自分の提出」のときだけ報告ボタンを表示します。押すと提出結果を報告します（自動報告なし）。報告はあくまで予測順位用で、確定順位・確定レートはAtCoder Problemsの公式データから集計されます。
 // @author       traP
+// @homepageURL  https://github.com/nagotch/nagotch_virtual
+// @supportURL   https://github.com/nagotch/nagotch_virtual/issues
+// @downloadURL  https://nagotch-virtual.trap.show/vabc-reporter.user.js
+// @updateURL    https://nagotch-virtual.trap.show/vabc-reporter.user.js
 // @match        https://atcoder.jp/contests/*/submissions/*
 // @run-at       document-end
 // @grant        GM_xmlhttpRequest
@@ -17,9 +21,10 @@
   'use strict';
 
   // ===== 設定 =====================================================
-  // サーバーURLは Tampermonkey のメニュー「nagotch_virtual: サーバーURLを設定」から
-  // いつでも変更できます（コード編集不要）。未設定時はこの既定値を使います。
-  const DEFAULT_API_BASE = 'http://localhost:3000';
+  // 既定の接続先（本番。Path Overlay でフロントとAPIが同一オリジン = APP_URL）。
+  // 各ユーザーは Tampermonkey メニュー「nagotch_virtual: サーバーURLを設定」から
+  // いつでも上書きできます（コード編集不要。ローカル開発なら http://localhost:3000 等）。
+  const DEFAULT_API_BASE = 'https://nagotch-virtual.trap.show';
   // ================================================================
 
   const LOG_PREFIX = '[nagotch_virtual]';
